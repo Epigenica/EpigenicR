@@ -55,10 +55,19 @@ bw_files <- c(
   "project1_batch1_H3K9me3_rerun_sample2_rep1.hg38.scaled.bw"
 )
 # or use list.files() to get actual files from a directory
-# bw_files <- list.files("~/data/bigwig/", pattern = "\\.bw$", full.names = TRUE)
+bw_files <- list.files("~/data/bigwig/", pattern = "\\.bw$", full.names = TRUE)
 
 metadata <- create_metadata_df(bw_files = bw_files)
 print(metadata)
+# A tibble: 6 × 10
+  bw_file                project_id batch marker rerun_id sample_id replicate genome scaling matched
+  <chr>                  <chr>      <chr> <chr>  <chr>    <chr>     <chr>     <chr>  <chr>   <lgl>  
+1 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… pooled    hg38   unscal… TRUE   
+2 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… pooled    hg38   unscal… TRUE   
+3 Proj1_A1_H3K27ac_1_SA… Proj1      A1    H3K27… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
+4 Proj1_A1_INPUT_1_SAMP… Proj1      A1    INPUT  1        SAMPLE-0… pooled    hg38   unscal… TRUE   
+5 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
+6 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
 ```
 
 ### 2. Download Genomic Annotations
@@ -649,15 +658,6 @@ qc_interactive <- plot_qc_stats(
 # Create metadata from BigWig filenames
 metadata_test <- create_metadata_df(bw_files = basename(bw_files))
 print(metadata_test)
-# A tibble: 6 × 10
-  bw_file                project_id batch marker rerun_id sample_id replicate genome scaling matched
-  <chr>                  <chr>      <chr> <chr>  <chr>    <chr>     <chr>     <chr>  <chr>   <lgl>  
-1 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… pooled    hg38   unscal… TRUE   
-2 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… pooled    hg38   unscal… TRUE   
-3 Proj1_A1_H3K27ac_1_SA… Proj1      A1    H3K27… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
-4 Proj1_A1_INPUT_1_SAMP… Proj1      A1    INPUT  1        SAMPLE-0… pooled    hg38   unscal… TRUE   
-5 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
-6 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
 ```
 
 **Example QC Plot Output:**
