@@ -1,0 +1,223 @@
+---
+title: "Getting Started with EpigenicR"
+author: "Nimra Ali"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with EpigenicR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE  # Set to TRUE when toy data is available
+)
+```
+
+## Introduction
+
+EpigenicR provides tools for processing, analyzing, and visualizing epigenomic data from ChIP-seq, methylation, and chromatin state experiments. This vignette demonstrates the basic workflow for using EpigenicR.
+
+## Installation
+
+See the [INSTALL.md](../INSTALL.md) file for detailed installation instructions.
+
+```{r install, eval=FALSE}
+# Install from local source
+devtools::install_local("/path/to/EpigenicR")
+```
+
+## Load the package
+
+```{r load}
+library(EpigenicR)
+library(dplyr)
+library(ggplot2)
+```
+
+## Workflow
+
+### 1. Extract Metadata from BigWig Files
+
+The first step is typically to extract metadata from your BigWig filenames. EpigenicR expects filenames in a specific format:
+
+`projectID_batch_marker_rerunID_sampleID_replicate.genome.scaling.bw`
+
+For example: `project1_batch1_H3K4me3_rerun_sample1_rep1.hg38.scaled.bw`
+
+```{r metadata}
+# Example BigWig filenames
+bw_files <- c(
+  "project1_batch1_H3K4me3_rerun_sample1_rep1.hg38.scaled.bw",
+  "project1_batch1_H3K4me3_rerun_sample1_rep2.hg38.scaled.bw",
+  "project1_batch1_H3K9me3_rerun_sample2_rep1.hg38.scaled.bw",
+  "project1_batch1_H3K9me3_rerun_sample2_rep2.hg38.scaled.bw"
+)
+
+# Extract metadata
+metadata <- create_metadata_df(bw_files = bw_files)
+print(metadata)
+```
+
+### 2. Download Genomic Annotations
+
+EpigenicR provides functions to download and process genomic annotations:
+
+```{r annotations, eval=FALSE}
+# Download GTF and create BED files for genes and TSS regions
+annotation_paths <- ensure_gtf_and_beds(
+  gtf_file = "~/data/gencode.v38.annotation.gtf",
+  gtf_url = "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_38/gencode.v38.annotation.gtf.gz",
+  genes_bed = "~/data/genes.hg38.bed",
+  tss2k_bed = "~/data/genes_tss_2kb.hg38.bed"
+)
+
+# Download ChromHMM chromatin state annotations
+download_chromhmm_annotations(
+  annotations = c("E107_15_coreMarks_hg38lift_mnemonics.bed"),
+  dest_dir = "~/data/chromHmm_annotations/"
+)
+```
+
+### 3. Quality Control Visualization
+
+Generate QC plots to assess data quality across markers and replicates:
+
+```{r qc_data}
+# Create example QC statistics
+qc_data <- data.frame(
+  marker = rep(c("H3K4me3", "H3K9me3", "H3K27me3"), each = 6),
+  replicate = rep(paste0("rep", 1:3), 6),
+  sample_id = rep(c("sample1", "sample2"), each = 9),
+  condition = rep(c("Control", "Treatment"), each = 9),
+  total_reads = runif(18, 1e6, 5e6),
+  mapped_reads = runif(18, 8e5, 4.5e6),
+  library_size = runif(18, 7e5, 4e6),
+  frip_score = runif(18, 0.1, 0.5)
+)
+```
+
+```{r qc_plot_static}
+# Create static ggplot2 figure
+qc_plot <- plot_qc_stats(
+  data = qc_data,
+  condition = "Control",
+  stats = c("total_reads", "mapped_reads", "frip_score"),
+  marker_levels = c("H3K4me3", "H3K9me3", "H3K27me3"),
+  engine = "ggplot",
+  legend_position = "bottom",
+  ncol = 3
+)
+print(qc_plot)
+```
+
+```{r qc_plot_interactive}
+# Create interactive plotly version
+qc_interactive <- plot_qc_stats(
+  data = qc_data,
+  condition = "Control",
+  stats = c("total_reads", "mapped_reads", "frip_score"),
+  engine = "plotly",
+  legend_position = "bottom",
+  ncol = 3
+)
+qc_interactive
+```
+
+### 4. Working with EPK Objects
+
+EPK (Epigenomic Package) objects bundle together MultiAssayExperiment data with QC statistics, enrichment results, and provenance information.
+
+```{r epk_structure, eval=FALSE}
+# EPK objects are typically created from processed BigWig data
+# They contain:
+# - mse: MultiAssayExperiment with multiple genomic feature sets
+# - tables: QC statistics and summary tables
+# - enrichment_results: Enrichment analysis results
+# - provenance: Creation timestamp and session info
+
+# Load an existing EPK object
+epk <- readRDS("path/to/project.epk.rds")
+
+# Print summary
+print(epk)
+
+# Access components
+mse <- epk$mse
+stats_summary <- epk$tables$stats_summary
+enrichment <- epk$enrichment_results
+```
+
+### 5. Sample Correlation Analysis
+
+Compute sample-sample correlations to assess replicate consistency:
+
+```{r correlation, eval=FALSE}
+# Compute correlations for all markers in the protein_coding experiment
+cor_matrices <- compute_all_cor(
+  mse = epk$mse,
+  exp_name = "protein_coding",
+  method = "pearson",
+  transform = "log1p"
+)
+
+# Access correlation matrix for a specific marker
+cor_h3k4me3 <- cor_matrices$H3K4me3
+
+# Visualize correlation heatmap
+library(ComplexHeatmap)
+Heatmap(cor_h3k4me3, 
+        name = "Correlation",
+        col = circlize::colorRamp2(c(0, 1), c("white", "red")))
+```
+
+## MultiAssayExperiment Structure
+
+Each EPK object contains a `MultiAssayExperiment` with experiments for different genomic feature types:
+
+- **protein_coding**: Protein-coding genes
+- **cpg**: CpG islands
+- **tss_2k**: TSS ±2kb regions
+- **vista_enhancer**: VISTA enhancers
+- **E107_chromatin_state**: Chromatin state segments
+
+Each experiment is a `SummarizedExperiment` with assays for each epigenomic marker (H3K4me3, H3K9me3, 5mC, etc.).
+
+```{r mae_structure, eval=FALSE}
+# Access experiments
+experiments <- MultiAssayExperiment::experiments(epk$mse)
+
+# Get protein coding genes data
+se_genes <- experiments$protein_coding
+
+# Access H3K4me3 data for protein coding genes
+h3k4me3_matrix <- SummarizedExperiment::assay(se_genes, "H3K4me3")
+```
+
+## Extracting Marker Names
+
+For flexible handling of sample IDs that contain marker information:
+
+```{r extract_markers}
+# Extract marker names from sample IDs
+sample_ids <- c("Sample1_H3K4me3_Rep1", "Sample2_H3K9me3_Rep2", "Sample3_5mC_Rep1")
+markers_list <- c("H3K4me3", "H3K9me3", "5mC", "H3K27me3")
+
+extracted <- sapply(sample_ids, extract_marker_names, markers = markers_list)
+print(extracted)
+```
+
+## Next Steps
+
+- Explore the individual function documentation using `?function_name`
+- See the [README.md](../README.md) for more examples
+- Check out the full workflow in the `epk.R` file for creating complete EPK objects
+
+## Session Info
+
+```{r session_info}
+sessionInfo()
+```

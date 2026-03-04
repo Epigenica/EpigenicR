@@ -1,0 +1,56 @@
+Package: EpigenicR
+Type: Package
+Title: Tools for Epigenomic Data Analysis and Visualization
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Nimra", "Ali",
+      email = "nimra@epigenica.org",
+      role = c("aut", "cre")
+    )
+  )
+Description: Provides tools for processing, analyzing, and visualizing 
+    epigenomic data from ChIP-seq, methylation, and chromatin state experiments.
+    Includes functions for quality control, metadata management, annotation 
+    retrieval, and creating comprehensive EPK (Epigenomic Package) objects
+    for downstream analysis.
+License: GPL (>= 3)
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1.0)
+Imports:
+    dplyr,
+    tidyr,
+    tidyselect,
+    stringr,
+    tibble,
+    ggplot2,
+    plotly,
+    patchwork,
+    wigglescout,
+    purrr,
+    furrr,
+    future (>= 1.34.0),
+    S4Vectors,
+    GenomicRanges,
+    SummarizedExperiment,
+    MultiAssayExperiment,
+    R.utils,
+    stats,
+    utils
+Suggests:
+    DT,
+    reactable,
+    htmltools,
+    ComplexHeatmap,
+    limma,
+    apeglm,
+    S4Arrays,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+URL: https://github.com/epigenica/EpigenicR
+BugReports: https://github.com/epigenica/EpigenicR/issues

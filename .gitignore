@@ -1,0 +1,35 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# R package build artifacts
+*.tar.gz
+*.tgz
+/check/
+/revdep/
+/*.Rcheck/
+
+# Documentation
+/doc/
+/Meta/
+
+# pkgdown site
+docs/
+
+# Temporary files
+*~
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Sensitive files
+.Renviron
+.env
