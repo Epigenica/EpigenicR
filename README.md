@@ -151,10 +151,10 @@ The toy dataset produces plots like this:
 ### 4. Create an EPK Object
 
 EPK (EpiPeaK) objects bundle together:
-- MultiAssayExperiment with multiple genomic feature sets
-- QC statistics tables
-- Enrichment results
-- Provenance information
+- MultiAssayExperiment with multiple genomic feature sets; RPGC values in dataframe format based on provided features coordinates and BigWig files (e.g., genes, CpG islands).  
+- QC statistics tables; `stats_summary` data frame containing QC metrics for each sample/marker.  
+- Enrichment results; chromatin state enrichment and profile enrichment tables for each marker/feature set.  
+- Provenance information; creation timestamp and session info for reproducibility.  
 
 #### Prerequisites
 Before creating an EPK object, ensure you have:
