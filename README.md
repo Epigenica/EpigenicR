@@ -71,6 +71,7 @@ print(metadata)
 ```
 
 ### 2. Download Genomic Annotations
+Here you donwload and create BED files for genomic features (genes, CpG islands) and retrieve chormatin states from Epigenome Roadmap. Note that chromatin states can be different for each project here we are using E107 (Skeletal Muscle Male) as an example. Check here for the full list of available chromatin state annotations and additional information [here](https://egg2.wustl.edu/roadmap/web_portal/chr_state_learning.html).    
 
 ```r
 # Ensure GTF file and generate BED files for genes and TSS regions
