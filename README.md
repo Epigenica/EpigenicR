@@ -26,7 +26,7 @@ remotes::install_github('cnluzon/wigglescout', build_vignettes = TRUE, force = T
 # (Requires access to Epigenica GitHub organization)
 remotes::install_github("epigenica/EpigenicR")
 
-# Or install from local source by downloading the repository as a ZIP file (on the repo press green clone button and download the zip file and uncompress) and run:
+# Or install from local source by downloading the repository as a ZIP file (on the repo press green code button and download the zip file and uncompress) and run:
 devtools::install_local("/path/to/EpigenicR")
 ```
 
