@@ -1,4 +1,4 @@
-# EpigenicR
+# EpigenicR <img src="man/figures/logo_with_plot.png" align="right" height="139" />
 
 > **Private Repository**: This package is maintained in Epigenica's private GitHub space for internal use.
 
