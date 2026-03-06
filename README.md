@@ -541,10 +541,16 @@ cor_h3k4me3 <- cor_matrices$H3K4me3
 
 **Expected Output:**
 
-Multi-panel QC plot:
+Multi-panel QC plot:  
+
 <img src="man/figures/qc_plot_example.png" width="100%" />  
 
-Single statistic view:
+
+**Single statistic view:**
+
+<img src="man/figures/qc_plot_simple.png" width="70%" />
+
+
 <img src="man/figures/qc_plot_simple.png" width="70%" />  
 
 *QC plots generated from the toy dataset showing various quality metrics across epigenetic markers.*
