@@ -171,6 +171,10 @@ qc_interactive
 - Enrichment results; chromatin state enrichment and profile enrichment tables for each marker/feature set.  For this part you will need to run `wigglescout::plot_bw_loci_summary_heatmap()` and `wigglescout::plot_bw_profile()` functions on your project data and save the results as .csv files in the appropriate directory structure.  You can find examples below and in the `inst/scripts/wigglescout_script.R` script.
 - Provenance information; creation timestamp and session info for reproducibility.
 
+EpiPeaK objects are designed to facilitate downstream analysis and visualization of epigenomic data in a structured format.  
+<img src="man/figures/EpiPeaK_Obj_illustration.png" width="100%" />
+
+
 #### Prerequisites
 Before creating an EPK object, ensure you have:
   - BigWig files (`bw_files`)
