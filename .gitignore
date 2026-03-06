@@ -3,6 +3,11 @@
 .RData
 .Ruserdata
 
+# files downloaded
+data/*bed
+data/*gtf
+data/chromHmm_annotations/
+
 # R package build artifacts
 *.tar.gz
 *.tgz
