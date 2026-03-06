@@ -5,14 +5,19 @@ This directory contains a small example dataset for demonstrating EpigenicR func
 ## Dataset Contents
 
 ### BigWig Files (6 files)
-1. `Proj1_A1_5mC_1_SAMPLE-0008_pooled.hg38.unscaled.bw` (3.6 MB) - Methylation sample 0008
-2. `Proj1_A1_5mC_1_SAMPLE-0054_pooled.hg38.unscaled.bw` (2.0 MB) - Methylation sample 0054
-3. `Proj1_A1_H3K27ac_1_SAMPLE-0018_pooled.hg38.unscaled.bw` (1.5 MB) - H3K27ac acetylation
-4. `Proj1_A1_INPUT_1_SAMPLE-0054_pooled.hg38.unscaled.bw` (2.0 MB) - INPUT control
-5. `Proj1_B1_H3K4me3_1_SAMPLE-0018_pooled.hg38.unscaled.bw` (1.1 MB) - H3K4me3 methylation
-6. `Proj1_B1_H3K4me3_1_SAMPLE-044_pooled.hg38.unscaled.bw` (2.4 MB) - H3K4me3 sample 044
 
-**Markers included**: 5mC, H3K4me3, H3K27ac, INPUT  
+**SAMPLE-0008** (3 markers):
+1. `Proj1_A1_5mC_1_SAMPLE-0008_pooled.hg38.unscaled.bw` (3.6 MB) - Methylation
+2. `Proj1_A1_H3K27ac_1_SAMPLE-0008_pooled.hg38.unscaled.bw` (1.5 MB) - H3K27 acetylation
+3. `Proj1_B1_H3K4me3_1_SAMPLE-0008_pooled.hg38.unscaled.bw` (1.1 MB) - H3K4 trimethylation
+
+**SAMPLE-0054** (3 markers):
+4. `Proj1_A1_5mC_1_SAMPLE-0054_pooled.hg38.unscaled.bw` (2.0 MB) - Methylation
+5. `Proj1_A1_INPUT_1_SAMPLE-0054_pooled.hg38.unscaled.bw` (2.0 MB) - INPUT control
+6. `Proj1_B1_H3K4me3_1_SAMPLE-0054_pooled.hg38.unscaled.bw` (2.4 MB) - H3K4 trimethylation
+
+**Structure**: Each sample has 3 epigenetic markers measured
+**Markers included**: 5mC (2x), H3K4me3 (2x), H3K27ac (1x), INPUT (1x)  
 **Genome**: hg38  
 **Format**: Unscaled BigWig
 

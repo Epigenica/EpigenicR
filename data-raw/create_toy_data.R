@@ -2,18 +2,16 @@
 # This script creates R data objects from the toy dataset files
 # Run this after uploading the BigWig files and stats_summary.txt
 
-library(EpigenicR)
+# Load required packages
 library(GenomicRanges)
 library(dplyr)
 library(tibble)
 
-# ---- Load toy data paths ----
-toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
+# Source functions directly (for development)
+source("R/functions.R")
 
-# If running during development (before package install)
-if (toy_dir == "") {
-  toy_dir <- here::here("inst/extdata/toy_dataset")
-}
+# ---- Load toy data paths ----
+toy_dir <- "inst/extdata/toy_dataset"
 
 # ---- Create toy_bw_files object ----
 toy_bw_files <- list.files(toy_dir, pattern = "\\.bw$", full.names = TRUE)

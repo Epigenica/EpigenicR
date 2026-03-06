@@ -60,14 +60,14 @@ bw_files <- list.files("~/data/bigwig/", pattern = "\\.bw$", full.names = TRUE)
 metadata <- create_metadata_df(bw_files = bw_files)
 print(metadata)
 # A tibble: 6 × 10
-  bw_file                project_id batch marker rerun_id sample_id replicate genome scaling matched
-  <chr>                  <chr>      <chr> <chr>  <chr>    <chr>     <chr>     <chr>  <chr>   <lgl>  
-1 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… pooled    hg38   unscal… TRUE   
-2 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… pooled    hg38   unscal… TRUE   
-3 Proj1_A1_H3K27ac_1_SA… Proj1      A1    H3K27… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
-4 Proj1_A1_INPUT_1_SAMP… Proj1      A1    INPUT  1        SAMPLE-0… pooled    hg38   unscal… TRUE   
-5 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
-6 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
+#   bw_file                project_id batch marker rerun_id sample_id replicate genome scaling matched
+#   <chr>                  <chr>      <chr> <chr>  <chr>    <chr>     <chr>     <chr>  <chr>   <lgl>  
+# 1 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… pooled    hg38   unscal… TRUE   
+# 2 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… pooled    hg38   unscal… TRUE   
+# 3 Proj1_A1_H3K27ac_1_SA… Proj1      A1    H3K27… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
+# 4 Proj1_A1_INPUT_1_SAMP… Proj1      A1    INPUT  1        SAMPLE-0… pooled    hg38   unscal… TRUE   
+# 5 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
+# 6 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… pooled    hg38   unscal… TRUE   
 ```
 
 ### 2. Download Genomic Annotations
@@ -153,7 +153,7 @@ The toy dataset produces plots like this:
 EPK (EpiPeaK) objects bundle together:
 - MultiAssayExperiment with multiple genomic feature sets; RPGC values in dataframe format based on provided features coordinates and BigWig files (e.g., genes, CpG islands).  
 - QC statistics tables; `stats_summary` data frame containing QC metrics for each sample/marker.  
-- Enrichment results; chromatin state enrichment and profile enrichment tables for each marker/feature set.  
+- Enrichment results; chromatin state enrichment and profile enrichment tables for each marker/feature set.  For this part you will need to run `wigglescout::plot_bw_loci_summary_heatmap()` and `wigglescout::plot_bw_profile()` functions on your project data and save the results as .csv files in the appropriate directory structure.  You can find examples below and in the `inst/scripts/wigglescout_script.R` script.
 - Provenance information; creation timestamp and session info for reproducibility.  
 
 #### Prerequisites
@@ -197,7 +197,7 @@ k_in <- paste0(seqnames(genes_coord_protein_coding), ":",
                end(genes_coord_protein_coding))
 genes_coord_protein_coding <- genes_coord_protein_coding[!duplicated(k_in)]
 
-# Rename metadata columns (V4 = gene_name, V5 = gene_id)
+# Rename genes_coord_protein_coding columns (V4 = gene_name, V5 = gene_id)
 colnames(mcols(genes_coord_protein_coding)) <- c("gene_name", "gene_id")
 
 # ---- Create CpG islands GRanges ----
@@ -219,7 +219,7 @@ cpg_islands <- cpg_coord %>%
     keep.extra.columns = TRUE
   )
 
-# Rename metadata column and create unique IDs
+# Rename cpg_islands column and create unique IDs
 colnames(mcols(cpg_islands)) <- c("cpg_id")
 cpg_islands$cpg_id <- paste(cpg_islands$cpg_id, 
                              seqnames(cpg_islands), 
@@ -243,7 +243,33 @@ tss_2k <- tss_2k_coord %>%
 
 # Verify GRanges objects
 print(genes_coord_protein_coding)
+# GRanges object with 5 ranges and 3 metadata columns:
+#       seqnames            ranges strand |   gene_name         gene_id      gene_type
+#          <Rle>         <IRanges>  <Rle> | <character>     <character>    <character>
+#  [1]    chr22 10500000-10510000      + |        TOY1 ENSG00000000001 protein_coding
+#  [2]    chr22 10600000-10610000      - |        TOY2 ENSG00000000002 protein_coding
+#  [3]    chr22 10700000-10710000      + |        TOY3 ENSG00000000003 protein_coding
+#  [4]    chr22 10800000-10810000      + |        TOY4 ENSG00000000004 protein_coding
+#  [5]    chr22 10900000-10910000      - |        TOY5 ENSG00000000005 protein_coding
+#  -------
+#  seqinfo: 1 sequence from an unspecified genome; no seqlengths
 print(cpg_islands)
+# GRanges object with 32038 ranges and 1 metadata column:
+#                         seqnames              ranges strand |                 cpg_id
+#                            <Rle>           <IRanges>  <Rle> |            <character>
+#       [1]                   chr1 155188536-155192004      * | CpG:_361_chr1_155188..
+#       [2]                   chr1     2226773-2229734      * | CpG:_366_chr1_222677..
+#       [3]                   chr1   36306229-36307408      * | CpG:_110_chr1_363062..
+#       [4]                   chr1   47708822-47710847      * | CpG:_164_chr1_477088..
+#       [5]                   chr1   53737729-53739637      * | CpG:_221_chr1_537377..
+#       ...                    ...                 ...    ... .                    ...
+#   [32034] chr22_KI270734v1_ran..       131009-132049      * | CpG:_102_chr22_KI270..
+#   [32035] chr22_KI270734v1_ran..       161256-161626      * | CpG:_55_chr22_KI2707..
+#   [32036] chr22_KI270735v1_ran..         17220-18098      * | CpG:_100_chr22_KI270..
+#   [32037] chr22_KI270738v1_ran..           4412-5280      * | CpG:_80_chr22_KI2707..
+#   [32038] chr22_KI270738v1_ran..           6225-6467      * | CpG:_34_chr22_KI2707..
+#   -------
+#   seqinfo: 423 sequences from an unspecified genome; no seqlengths
 ```
 
 #### Step-by-step EPK Creation
@@ -252,6 +278,8 @@ print(cpg_islands)
 library(wigglescout)
 library(SummarizedExperiment)
 library(MultiAssayExperiment)
+
+proj_dir <- "."  # Adjust to your project directory containing results
 
 # ---- Step 4a: Process BigWig files per marker and feature set ----
 
@@ -353,56 +381,10 @@ mse <- MultiAssayExperiment::MultiAssayExperiment(
 )
 
 # ---- Step 4d: Load enrichment results ----
-
-# Chromatin state enrichment
-files_list_protein_coding <- list.files(
-  file.path(proj_dir, "results/Enrichment", "protein_coding"), 
-  pattern = ".*_chromatin_state_dist\\.csv$", 
-  full.names = TRUE,
-  recursive = TRUE
-)
-files_list_cpg_islands <- file.path(
-  proj_dir, 
-  "results/Enrichment", 
-  "CpG_islands", 
-  "5mC_chromatin_state_dist.csv"
-)
-
-enrichment_results <- list(
-  protein_coding = setNames(
-    lapply(files_list_protein_coding, read.csv, sep = ",", header = TRUE, stringsAsFactors = FALSE),
-    basename(dirname(files_list_protein_coding))
-  ),
-  cpg_islands = setNames(
-    lapply(files_list_cpg_islands, read.csv, sep = ",", header = TRUE, stringsAsFactors = FALSE),
-    '5mC'
-  )
-)
-
-# Profile enrichment
-files_list_protein_coding <- list.files(
-  file.path(proj_dir, "results/Enrichment", "protein_coding"), 
-  pattern = ".*_profile_start_data\\.csv$", 
-  full.names = TRUE,
-  recursive = TRUE
-)
-files_list_cpg_islands <- file.path(
-  proj_dir, 
-  "results/Enrichment", 
-  "CpG_islands", 
-  "methylation_profile_start_data.csv"
-)
-
-profile_results <- list(
-  protein_coding = setNames(
-    lapply(files_list_protein_coding, read.csv, sep = ",", header = TRUE, stringsAsFactors = FALSE),
-    basename(dirname(files_list_protein_coding))
-  ),
-  cpg_islands = setNames(
-    lapply(files_list_cpg_islands, read.csv, sep = ",", header = TRUE, stringsAsFactors = FALSE),
-    '5mC'
-  )
-)
+# enrichment_results should be a list of data frames containing enrichment results for chromatin states and profiles, generated from wigglescout functions and saved as .csv files in your project directory. check the `inst/scripts/wigglescout_script.R` for examples on how to generate and save these results. 
+data("enrichment_results")
+# profile_results should be a list of data frames containing profile enrichment results for each marker/feature set, generated from wigglescout functions and saved as .csv files in your project directory. check the `inst/scripts/wigglescout_script.R` for examples on how to generate and save these results.
+data("profile_results")
 
 # ---- Step 4e: Build final EPK object ----
 
@@ -427,6 +409,16 @@ epk <- structure(
 # Save EPK object
 saveRDS(epk, file.path(proj_dir, "results/project.epk.rds"))
 message("EPK object saved successfully!")
+print(epk) 
+# EPK object
+# -----------
+# * Experiments:
+#   - protein_coding: 19954 features × 48 samples, 4 assays
+#   - cpg: 32038 features × 48 samples, 4 assays
+# * Tables:
+#   - stats_summary: 250 rows × 20 cols
+# * Enrichment results: 2 tables
+# * Created: 2026-02-25 11:54:54 
 ```
 
 #### Loading and Inspecting EPK Objects
@@ -437,6 +429,15 @@ epk <- readRDS("project.epk.rds")
 
 # Print summary
 print(epk)
+# EPK object
+# -----------
+# * Experiments:
+#   - protein_coding: 19954 features × 48 samples, 4 assays
+#   - cpg: 32038 features × 48 samples, 4 assays
+# * Tables:
+#   - stats_summary: 250 rows × 20 cols
+# * Enrichment results: 2 tables
+# * Created: 2026-02-25 11:54:54 
 
 # Access components
 mse <- epk$mse
@@ -745,10 +746,8 @@ Single statistic view:
 ### Dataset Contents
 
 - **6 BigWig files**: Chromatin (H3K4me3, H3K27ac, INPUT) and methylation (5mC) profiles from real samples
-  - 2 samples with 5mC methylation profiles
-  - 2 samples with H3K4me3
-  - 1 sample with H3K27ac
-  - 1 INPUT control
+  - **SAMPLE-0008**: 5mC, H3K27ac, H3K4me3 (3 markers)
+  - **SAMPLE-0054**: 5mC, INPUT, H3K4me3 (3 markers)
 - **stats_summary.txt**: QC statistics table with read counts, duplication rates, and library sizes
 - **toy_metadata**: Pre-extracted metadata from filenames (available as R data object)
 - **toy_stats_summary**: Processed QC statistics (available as R data object)
