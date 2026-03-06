@@ -817,7 +817,7 @@ For Epigenica team members:
 
 For questions, issues, or support:
 - GitHub Issues: https://github.com/epigenica/EpigenicR/issues
-- Package Maintainer: nima.rafati@epigenica.com
+- Package Maintainer: nima.rafati@epigenica.se
 
 ---
 
