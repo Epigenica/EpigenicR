@@ -541,13 +541,13 @@ cor_h3k4me3 <- cor_matrices$H3K4me3
 
 **Expected Output:**
 
-  Multi-panel QC plot:
-  <img src="man/figures/qc_plot_example.png" width="100%" />
+Multi-panel QC plot:
+<img src="man/figures/qc_plot_example.png" width="100%" />  
 
-  Single statistic view:
-  <img src="man/figures/qc_plot_simple.png" width="70%" />
+Single statistic view:
+<img src="man/figures/qc_plot_simple.png" width="70%" />  
 
-  *QC plots generated from the toy dataset showing various quality metrics across epigenetic markers.*
+*QC plots generated from the toy dataset showing various quality metrics across epigenetic markers.*
 
 > **Note**: Example plots shown above were generated using `inst/scripts/generate_example_plots.R`. You can regenerate them by running: `Rscript inst/scripts/generate_example_plots.R`
 
@@ -556,10 +556,10 @@ For more details, see `inst/extdata/toy_dataset/README.md`
 ## Dependencies
 
 Core dependencies:
-  - dplyr, tidyr, stringr, tibble (data manipulation)
-- ggplot2, plotly, patchwork (visualization)
-- wigglescout (BigWig processing)
-- GenomicRanges, SummarizedExperiment, MultiAssayExperiment (Bioconductor data structures)
+- `dplyr`, `tidyr`, `stringr`, `tibble` (data manipulation)
+- `ggplot2`, `plotly`, `patchwork` (visualization)
+- `wigglescout` (BigWig processing)
+- `GenomicRanges`, `SummarizedExperiment`, `MultiAssayExperiment` (Bioconductor data structures)
 
 See [DESCRIPTION](DESCRIPTION) for full dependency list.
 
@@ -567,7 +567,7 @@ See [DESCRIPTION](DESCRIPTION) for full dependency list.
 
 For internal reports and publications using EpigenicR, please cite:
 
-  ```
+```
 EpigenicR: R package for EpiFinder platform data analysis
 Epigenica (2026)
 Version 0.1.0
