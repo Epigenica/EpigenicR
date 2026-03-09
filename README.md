@@ -186,8 +186,8 @@ stats_summary <- read.csv(
 )
 
 # Or load QC table directly from a saved EPK object
-# epk_loaded <- readRDS("data/project.epk.rds")
-# stats_summary <- epk_loaded$tables$stats_summary
+epk_loaded <- readRDS("data/project.epk.rds")
+stats_summary <- epk_loaded$tables$stats_summary
 # Add fraction mapped
 stats_summary <- as_tibble(stats_summary) %>% mutate(frac_mapped = stats_summary$raw_mapped/stats_summary$raw_demultiplexed)
 # Remove frac_mapq_filtered column if exists
@@ -277,15 +277,23 @@ names(MultiAssayExperiment::experiments(epk_multi$mse))
 #### Add new features to `mse` slot after creation
 
 ```r
-# Build only the new feature experiment
-epk_enhancer <- create_epk(
+# Add new features directly to an existing EPK object
+epk_loaded <- add_features_to_epk(
+  epk = epk_loaded,
   pipeline_output_path = toy_dir,
-  annotations = list(enhancer = "data/enhancer.bed")
+  annotations = list(
+    enhancer = "data/enhancer.bed",
+    cpg_islands = "data/cpg_islands.bed"
+  )
 )
 
-# Append the new experiment to an existing EPK
-MultiAssayExperiment::experiments(epk_loaded$mse)[["enhancer"]] <-
-  MultiAssayExperiment::experiments(epk_enhancer$mse)[["enhancer"]]
+# Optionally replace existing experiment names
+# epk_loaded <- add_features_to_epk(
+#   epk = epk_loaded,
+#   pipeline_output_path = toy_dir,
+#   annotations = list(primary_annotation = "data/updated_features.bed"),
+#   overwrite = TRUE
+# )
 
 names(MultiAssayExperiment::experiments(epk_loaded$mse))
 ```
