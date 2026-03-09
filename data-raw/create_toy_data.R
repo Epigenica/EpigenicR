@@ -12,9 +12,12 @@ source("R/functions.R")
 
 # ---- Load toy data paths ----
 toy_dir <- "inst/extdata/toy_dataset"
+toy_minute_output_dir <- file.path(toy_dir, "minute_output")
+toy_bigwig_dir <- file.path(toy_minute_output_dir, "bigwig")
+toy_stats_file <- file.path(toy_minute_output_dir, "reports", "stats_summary.txt")
 
 # ---- Create toy_bw_files object ----
-toy_bw_files <- list.files(toy_dir, pattern = "\\.bw$", full.names = TRUE)
+toy_bw_files <- list.files(toy_bigwig_dir, pattern = "\\.bw$", full.names = TRUE)
 names(toy_bw_files) <- basename(toy_bw_files)
 
 message("Found ", length(toy_bw_files), " BigWig files:")
@@ -27,7 +30,7 @@ print(toy_metadata)
 
 # ---- Load toy stats_summary ----
 toy_stats_summary <- read.table(
-  file.path(toy_dir, "stats_summary.txt"),
+  toy_stats_file,
   header = TRUE,
   sep = "\t",
   stringsAsFactors = FALSE
@@ -44,7 +47,7 @@ toy_stats_summary <- toy_stats_summary %>%
       TRUE ~ "Unknown"
     ),
     sample_id = gsub(".*_(SAMPLE-[0-9]+).*", "\\1", map_id),
-    replicate = "pooled",
+    replicate = sub(".*_(rep[0-9]+)\\..*", "\\1", map_id),
     condition = "toy_dataset"
   )
 

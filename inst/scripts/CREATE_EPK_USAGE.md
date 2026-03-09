@@ -34,23 +34,26 @@ epk <- create_epk(
 Use this when your pipeline output follows standard directory structure:
 
 ```
-pipeline_output/
-├── bigwig/
-│   ├── *.bw files
-└── stats_summary.txt (or .csv)
+project_root/
+└── minute_output/
+  ├── bigwig/
+  │   ├── *.bw files
+  └── reports/
+    └── stats_summary.txt
 ```
 
 ### Example
 ```r
 epk <- create_epk(
-  pipeline_output_path = "/Users/research/myproject/pipeline_output",
+  pipeline_output_path = "/Users/research/myproject",
   annotations = "/Users/research/myproject/annotations/hg38.genes.bed"
 )
 ```
 
 **What it does automatically:**
-- Finds all `.bw` files in `bigwig/` subdirectory (or root if not found)
-- Reads `stats_summary.txt` or `stats_summary.csv`
+- Finds all `.bw` files in `minute_output/bigwig/`
+- Reads `minute_output/reports/stats_summary.txt`
+- Verifies every BigWig maps to a `stats_summary$map_id` value
 - Extracts marker names and sample IDs from filenames
 - Creates one EPK object ready to use
 
@@ -66,17 +69,27 @@ Use this for maximum control or non-standard directory layouts.
 library(EpigenicR)
 
 # Load from package
-data(toy_genes, toy_stats_summary)
+data(toy_genes)
 
 # Specify files
 toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
-bw_files <- list.files(toy_dir, pattern = "\\.bw$", full.names = TRUE)
+bw_files <- list.files(
+  file.path(toy_dir, "minute_output", "bigwig"),
+  pattern = "\\.bw$",
+  full.names = TRUE
+)
+stats_summary <- read.table(
+  file.path(toy_dir, "minute_output", "reports", "stats_summary.txt"),
+  header = TRUE,
+  sep = "\t",
+  stringsAsFactors = FALSE
+)
 
 # Create EPK
 epk <- create_epk(
   bw_files = bw_files,
   annotations = toy_genes,      # GRanges object
-  stats_summary = toy_stats_summary
+  stats_summary = stats_summary
 )
 ```
 
@@ -86,7 +99,7 @@ epk <- create_epk(
 epk <- create_epk(
   bw_files = bw_files,
   annotations = "/path/to/genes.hg38.bed",  # AutomPly read via rtracklayer
-  stats_summary = toy_stats_summary
+  stats_summary = stats_summary
 )
 ```
 
@@ -104,7 +117,7 @@ my_regions <- data.frame(
 epk <- create_epk(
   bw_files = bw_files,
   annotations = my_regions,     # Auto-converted to GRanges
-  stats_summary = toy_stats_summary
+  stats_summary = stats_summary
 )
 ```
 
@@ -119,7 +132,7 @@ epk <- create_epk(
     cpg_islands = cpg_islands_granges,
     enhancers = enhancers_bed_path
   ),
-  stats_summary = toy_stats_summary
+  stats_summary = stats_summary
 )
 
 # Access individual experiments

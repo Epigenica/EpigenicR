@@ -15,13 +15,15 @@
 #'   Required in both modes.
 #'
 #' @param stats_summary A data frame containing QC statistics (e.g., from \code{toy_stats_summary}).
-#'   Must include columns: \code{sample_id}, \code{marker}. Required for explicit mode.
+#'   Must include column \code{map_id} in format
+#'   \code{(.*_rep[0-9].genome)} so BigWig files can be checked against
+#'   stats rows. Required for explicit mode.
 #'   Ignored if \code{pipeline_output_path} is provided.
 #'
 #' @param pipeline_output_path Character path to pipeline output directory containing:
 #'   \itemize{
-#'     \item \code{bigwig/} or similar subdirectory with \code{*.bw} files
-#'     \item \code{stats_summary.txt} or \code{stats_summary.csv}
+#'     \item \code{minute_output/bigwig/} with \code{*.bw} files
+#'     \item \code{minute_output/reports/stats_summary.txt}
 #'   }
 #'   If provided, \code{bw_files} and \code{stats_summary} are ignored.
 #'
@@ -57,22 +59,38 @@
 #' Markers are detected from BigWig file names by looking for common patterns
 #' (H3K4me3, H3K27ac, 5mC, etc.). Replicates are identified and handled.
 #'
+#' \strong{Consistency checkpoint:}
+#' If \code{stats_summary} is available, each BigWig file must follow
+#' \code{(.*_rep[0-9].genome.[unscaled|scaled].bw)} and its basename without
+#' \code{.scaled/.unscaled.bw} must be present in \code{stats_summary$map_id}.
+#' The function stops with an error if mismatches are found.
+#'
 #' @examples
 #' \dontrun{
 #' # Example 1: Explicit mode with GRanges annotation
-#' data(toy_metadata, toy_stats_summary, toy_genes)
+#' data(toy_metadata, toy_genes)
 #' toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
-#' bw_files <- list.files(toy_dir, pattern = "\\.bw$", full.names = TRUE)
+#' bw_files <- list.files(
+#'   file.path(toy_dir, "minute_output", "bigwig"),
+#'   pattern = "\\.bw$",
+#'   full.names = TRUE
+#' )
+#' stats_summary <- read.table(
+#'   file.path(toy_dir, "minute_output", "reports", "stats_summary.txt"),
+#'   header = TRUE,
+#'   sep = "\t",
+#'   stringsAsFactors = FALSE
+#' )
 #'
 #' epk <- create_epk(
 #'   bw_files = bw_files,
 #'   annotations = toy_genes,
-#'   stats_summary = toy_stats_summary
+#'   stats_summary = stats_summary
 #' )
 #'
 #' # Example 2: Path mode with BED annotation
 #' epk <- create_epk(
-#'   pipeline_output_path = "/path/to/pipeline/output",
+#'   pipeline_output_path = "/path/to/project",
 #'   annotations = "/path/to/annotations.bed"
 #' )
 #'
@@ -83,7 +101,7 @@
 #'     genes = toy_genes,
 #'     cpg_islands = cpg_islands_granges
 #'   ),
-#'   stats_summary = toy_stats_summary
+#'   stats_summary = stats_summary
 #' )
 #' }
 #'
@@ -135,6 +153,8 @@ create_epk <- function(
         "No stats_summary found in pipeline output path. ",
         "Proceeding with minimal metadata; enrichment functions may be limited."
       )
+    } else {
+      .validate_bw_files_in_stats_summary(bw_files = bw_files, stats_summary = stats_summary)
     }
   } else {
     # ===== MODE 2: EXPLICIT INPUT =====
@@ -157,6 +177,8 @@ create_epk <- function(
         "No 'stats_summary' provided. Proceeding with minimal metadata; ",
         "enrichment functions may be limited."
       )
+    } else {
+      .validate_bw_files_in_stats_summary(bw_files = bw_files, stats_summary = stats_summary)
     }
   }
 
@@ -294,8 +316,9 @@ create_epk <- function(
 #' Discover BigWig files in pipeline output directory
 #' @keywords internal
 .discover_bigwig_files <- function(path) {
-  # Search for .bw files in common subdirectories
+  # Search for .bw files in minute-chip style directories first
   candidates <- c(
+    file.path(path, "minute_output", "bigwig"),
     file.path(path, "bigwig"),
     file.path(path, "bw"),
     file.path(path, "BigWig"),
@@ -318,6 +341,14 @@ create_epk <- function(
 #' @keywords internal
 .discover_stats_summary <- function(path) {
   candidates <- c(
+    file.path(path, "minute_output", "reports", "stats_summary.txt"),
+    file.path(path, "minute_output", "reports", "stats_summary.csv"),
+    file.path(path, "minute_output", "reports", "stats_summary", "stats_summary.txt"),
+    file.path(path, "minute_output", "reports", "stats_summary", "stats_summary.csv"),
+    file.path(path, "reports", "stats_summary.txt"),
+    file.path(path, "reports", "stats_summary.csv"),
+    file.path(path, "reports", "stats_summary", "stats_summary.txt"),
+    file.path(path, "reports", "stats_summary", "stats_summary.csv"),
     file.path(path, "stats_summary.txt"),
     file.path(path, "stats_summary.csv"),
     file.path(path, "qc", "stats_summary.txt"),
@@ -332,6 +363,49 @@ create_epk <- function(
   }
 
   return(NULL)
+}
+
+#' Validate that BigWig files match stats_summary$map_id
+#' @keywords internal
+.validate_bw_files_in_stats_summary <- function(bw_files, stats_summary) {
+  if (!"map_id" %in% names(stats_summary)) {
+    stop("'stats_summary' must contain a 'map_id' column.")
+  }
+
+  bw_base <- basename(bw_files)
+  bw_pattern <- "_rep[0-9]+\\.[^.]+\\.(unscaled|scaled)\\.bw$"
+  invalid_bw <- bw_base[!grepl(bw_pattern, bw_base)]
+  if (length(invalid_bw) > 0) {
+    stop(
+      "Invalid BigWig filename format. Expected pattern: ",
+      "(.*_rep[0-9].genome.[unscaled|scaled].bw)\n",
+      "Invalid file(s):\n  ",
+      paste(invalid_bw, collapse = "\n  ")
+    )
+  }
+
+  map_id_pattern <- "_rep[0-9]+\\.[^.]+$"
+  invalid_map_id <- stats_summary$map_id[!grepl(map_id_pattern, stats_summary$map_id)]
+  if (length(invalid_map_id) > 0) {
+    stop(
+      "Invalid map_id format in stats_summary. Expected pattern: ",
+      "(.*_rep[0-9].genome)\n",
+      "Invalid map_id value(s):\n  ",
+      paste(unique(invalid_map_id), collapse = "\n  ")
+    )
+  }
+
+  bw_map_id <- sub("\\.(unscaled|scaled)\\.bw$", "", bw_base)
+  missing_in_stats <- setdiff(bw_map_id, stats_summary$map_id)
+
+  if (length(missing_in_stats) > 0) {
+    stop(
+      "The following bw_files are not listed in stats_summary$map_id:\n  ",
+      paste(missing_in_stats, collapse = "\n  ")
+    )
+  }
+
+  invisible(TRUE)
 }
 
 #' Normalize annotation input to GRanges

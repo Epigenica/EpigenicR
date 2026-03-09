@@ -13,11 +13,13 @@ library(EpigenicR)
 # Example: Running on real pipeline output structure
 # Assume your pipeline output is organized like:
 #   /path/to/project/
-#   ├── bigwig/
-#   │   ├── Proj1_A1_H3K4me3_1_SAMPLE-0008_pooled.hg38.unscaled.bw
-#   │   ├── Proj1_A1_H3K27ac_1_SAMPLE-0008_pooled.hg38.unscaled.bw
-#   │   └── ... (more .bw files)
-#   └── stats_summary.txt
+#   └── minute_output/
+#       ├── bigwig/
+#       │   ├── Proj1_A1_H3K4me3_1_SAMPLE-0008_rep1.hg38.unscaled.bw
+#       │   ├── Proj1_A1_H3K27ac_1_SAMPLE-0008_rep1.hg38.unscaled.bw
+#       │   └── ... (more .bw files)
+#       └── reports/
+#           └── stats_summary.txt
 
 # One-liner: Create EPK from pipeline output with annotation file
 epk_from_pipeline <- create_epk(
@@ -35,16 +37,26 @@ MultiAssayExperiment::experiments(epk_from_pipeline$mse)
 # ==============================================================================
 
 # Example 2a: Using toy dataset from package
-data(toy_stats_summary, toy_genes)
+data(toy_genes)
 
 toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
-bw_files <- list.files(toy_dir, pattern = "\\.bw$", full.names = TRUE)
+bw_files <- list.files(
+  file.path(toy_dir, "minute_output", "bigwig"),
+  pattern = "\\.bw$",
+  full.names = TRUE
+)
+stats_summary <- read.table(
+  file.path(toy_dir, "minute_output", "reports", "stats_summary.txt"),
+  header = TRUE,
+  sep = "\t",
+  stringsAsFactors = FALSE
+)
 
 # Create EPK with explicit files and GRanges annotation
 epk_explicit <- create_epk(
   bw_files = bw_files,
   annotations = toy_genes,
-  stats_summary = toy_stats_summary
+  stats_summary = stats_summary
 )
 
 print(epk_explicit)
@@ -57,7 +69,7 @@ print(epk_explicit)
 epk_explicit_bed <- create_epk(
   bw_files = bw_files,
   annotations = "/path/to/annotation.bed",
-  stats_summary = toy_stats_summary
+  stats_summary = stats_summary
 )
 
 
@@ -76,7 +88,7 @@ annotation_df <- data.frame(
 epk_explicit_df <- create_epk(
   bw_files = bw_files,
   annotations = annotation_df,
-  stats_summary = toy_stats_summary
+  stats_summary = stats_summary
 )
 
 
@@ -98,7 +110,7 @@ epk_multi <- create_epk(
     genes = toy_genes
     # cpg_islands = cpg_annotation
   ),
-  stats_summary = toy_stats_summary
+  stats_summary = stats_summary
 )
 
 # Access individual experiments

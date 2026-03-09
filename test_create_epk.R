@@ -15,13 +15,23 @@ cat("✓ create_epk function successfully loaded\n")
 # Test with toy data
 cat("\n\n=== Testing create_epk with toy dataset ===\n")
 
-data(toy_metadata, toy_stats_summary, toy_genes)
+data(toy_metadata, toy_genes)
 
 toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
-bw_files <- list.files(toy_dir, pattern = "\\.bw$", full.names = TRUE)
+bw_files <- list.files(
+  file.path(toy_dir, "minute_output", "bigwig"),
+  pattern = "\\.bw$",
+  full.names = TRUE
+)
+stats_summary <- read.table(
+  file.path(toy_dir, "minute_output", "reports", "stats_summary.txt"),
+  header = TRUE,
+  sep = "\t",
+  stringsAsFactors = FALSE
+)
 
 cat("BigWig files found:", length(bw_files), "\n")
-cat("Sample stats_summary:", nrow(toy_stats_summary), "rows\n")
+cat("Sample stats_summary:", nrow(stats_summary), "rows\n")
 cat("Annotations (toy_genes):", length(toy_genes), "regions\n")
 
 cat("\nAttempting to create EPK object...\n")
@@ -30,7 +40,7 @@ tryCatch({
   epk <- create_epk(
     bw_files = bw_files,
     annotations = toy_genes,
-    stats_summary = toy_stats_summary
+    stats_summary = stats_summary
   )
   
   cat("\n✓ EPK object created successfully!\n")
