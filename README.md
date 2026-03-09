@@ -32,9 +32,9 @@ devtools::install_local("/path/to/EpigenicR")
 
 ## Overview
 
-
 EpigenicR provides tools for:
 
+- **Simplified EPK creation**: `create_epk()` wrapper for streamlined EPK object creation
 - **Metadata management**: Extract and organize sample information from BigWig filenames
 - **Quality control**: Visualize QC statistics across markers, conditions, and replicates
 - **Annotation retrieval**: Download and process GTF/BED files for genomic features
@@ -45,17 +45,65 @@ EpigenicR provides tools for:
 ## Quick Start
 ### Dataset Contents
 
-- **6 BigWig files**: Chromatin (H3K4me3, H3K27ac, INPUT) and methylation (5mC) profiles from real samples
-- **SAMPLE-0008**: 5mC, H3K27ac, H3K4me3 (3 markers)
-- **SAMPLE-0054**: 5mC, INPUT, H3K4me3 (3 markers)
-- **stats_summary.txt**: QC statistics table with read counts, duplication rates, and library sizes
-- **toy_metadata**: Pre-extracted metadata from filenames (available as R data object)
-- **toy_stats_summary**: Processed QC statistics (available as R data object)
-- **toy_genes**: Example gene coordinates on chr22 for testing (available as R data object)
+Stored in `minute_output/` structure (matching EpiFinder pipeline output):
 
-**Markers**: 5mC, H3K4me3, H3K27ac, INPUT
-**Genome**: hg38 (unscaled BigWig format)
-**Total size**: ~13 MB
+```
+inst/extdata/toy_dataset/
+└── minute_output/
+    ├── bigwig/
+    │   └── 8 BigWig files (rep1 naming: *.rep1.hg38.unscaled.bw)
+    └── reports/
+        └── stats_summary.txt
+```
+
+- **8 BigWig files**: Chromatin (H3K4me3, H3K27ac, INPUT) and methylation (5mC) profiles
+  - **SAMPLE-0008**: 5mC, H3K27ac, H3K4me3 (3 markers)
+  - **SAMPLE-0054**: 5mC, INPUT, H3K4me3 (3 markers)
+- **stats_summary.txt**: QC statistics with `map_id` column matching BigWig filenames
+- **toy_metadata**: Pre-extracted metadata from filenames (R data object)
+- **toy_stats_summary**: Processed QC statistics (R data object)
+- **toy_genes**: Example gene coordinates on chr22 (R data object)
+
+**Markers**: 5mC, H3K4me3, H3K27ac, INPUT | **Genome**: hg38 | **Format**: unscaled BigWig | **Total**: ~13 MB
+
+### 0. Quick Start: Create EPK Directly
+
+The simplest way to create an EPK object from pipeline output:
+
+```r
+library(EpigenicR)
+
+# Path mode (auto-discovers files from minute_output/ structure)
+data(toy_genes)  # Load example annotations
+epk <- create_epk(
+  pipeline_output_path = "/path/to/project",  # Contains minute_output/
+  annotations = toy_genes
+)
+print(epk)
+```
+
+Or with explicit files:
+
+```r
+toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
+bw_files <- list.files(
+  file.path(toy_dir, "minute_output", "bigwig"),
+  pattern = "\\.bw$",
+  full.names = TRUE
+)
+stats_summary <- read.table(
+  file.path(toy_dir, "minute_output", "reports", "stats_summary.txt"),
+  header = TRUE, sep = "\\t", stringsAsFactors = FALSE
+)
+
+epk <- create_epk(
+  bw_files = bw_files,
+  annotations = toy_genes,
+  stats_summary = stats_summary
+)
+```
+
+See [inst/scripts/CREATE_EPK_USAGE.md](inst/scripts/CREATE_EPK_USAGE.md) for comprehensive examples.
 
 ### 1. Extract Metadata from BigWig Files
 
@@ -69,7 +117,7 @@ bw_files <- c(
   "project1_batch1_H3K9me3_rerun_sample2_rep1.hg38.scaled.bw"
 )
 # or use list.files() to get actual files from a directory
-bw_files <- list.files("inst/extdata/toy_dataset/", pattern = "\\.bw$", full.names = TRUE)
+bw_files <- list.files("minute_output/bigwig/", pattern = "\\.bw$", full.names = TRUE)
 
 metadata <- create_metadata_df(bw_files = bw_files)
 print(metadata)
@@ -124,8 +172,11 @@ stats_summary <- data.frame(
   mapped_reads = runif(9, 8e5, 4.5e6),
   library_size = runif(9, 7e5, 4e6)
 )
-# Or load from actual QC summary tables generated during processing
-stats_summary <- read.csv(file.path("inst/extdata/toy_dataset/stats_summary.txt"), sep = "\t", header = T)
+# Or load from actual QC summary tables generated during pipeline
+stats_summary <- read.csv(
+  file.path("minute_output/reports/stats_summary.txt"),
+  sep = "\t", header = TRUE
+)
 # Add fraction mapped
 stats_summary <- as_tibble(stats_summary) %>% mutate(frac_mapped = stats_summary$raw_mapped/stats_summary$raw_demultiplexed)
 # Remove frac_mapq_filtered column if exists
@@ -163,9 +214,9 @@ qc_interactive
 
   *QC plot showing final mapped reads, library size, and duplication rate for toy dataset samples.*
 
-  ### 4. Create an EPK Object
+  ### 4. Create an EPK Object (Advanced)
 
-  EPK (EpiPeaK) objects bundle together:
+  For full control, use `create_epk()` with explicit parameters. EPK (EpiPeaK) objects bundle together:
   - MultiAssayExperiment with multiple genomic feature sets; RPGC values in dataframe format based on provided features coordinates and BigWig files (e.g., genes, CpG islands).
 - QC statistics tables; `stats_summary` data frame containing QC metrics for each sample/marker.
 - Enrichment results; chromatin state enrichment and profile enrichment tables for each marker/feature set.  For this part you will need to run `wigglescout::plot_bw_loci_summary_heatmap()` and `wigglescout::plot_bw_profile()` functions on your project data and save the results as .csv files in the appropriate directory structure.  You can find examples below and in the `inst/scripts/wigglescout_script.R` script.
