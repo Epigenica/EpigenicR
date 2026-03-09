@@ -110,7 +110,16 @@ add_features_to_epk <- function(
         stop(msg)
       }
 
-      new_exps[[nm]] <- new_exps[[nm]][, existing_samples]
+      if (!identical(existing_samples, new_samples)) {
+        idx <- match(existing_samples, new_samples)
+        if (any(is.na(idx))) {
+          stop(
+            "Internal error while aligning samples for experiment '", nm,
+            "': could not match all existing sample IDs."
+          )
+        }
+        new_exps[[nm]] <- new_exps[[nm]][, idx]
+      }
     }
   }
 
@@ -118,7 +127,10 @@ add_features_to_epk <- function(
     existing_exps[[nm]] <- new_exps[[nm]]
   }
 
-  MultiAssayExperiment::experiments(epk$mse) <- existing_exps
+  epk$mse <- MultiAssayExperiment::MultiAssayExperiment(
+    experiments = existing_exps,
+    colData = SummarizedExperiment::colData(epk$mse)
+  )
   epk$provenance$updated <- Sys.time()
 
   return(epk)
