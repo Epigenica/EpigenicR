@@ -9,7 +9,11 @@ library(dplyr)
 
 # ---- 1. Access toy BigWig files ----
 toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
-bw_files <- list.files(toy_dir, pattern = "\\.bw$", full.names = TRUE)
+bw_files <- list.files(
+  file.path(toy_dir, "minute_output", "bigwig"),
+  pattern = "\\.bw$",
+  full.names = TRUE
+)
 
 cat("Toy dataset location:", toy_dir, "\n")
 cat("Number of BigWig files:", length(bw_files), "\n\n")

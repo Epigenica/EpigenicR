@@ -4,6 +4,19 @@ This directory contains a small example dataset for demonstrating EpigenicR func
 
 ## Dataset Contents
 
+### minute_output Layout
+
+The toy dataset now mirrors the minute-chip output structure used by path mode:
+
+```text
+toy_dataset/
+└── minute_output/
+  ├── bigwig/
+  │   └── *.bw
+  └── reports/
+    └── stats_summary.txt
+```
+
 ### BigWig Files (6 files)
 
 **SAMPLE-0008** (3 markers):
@@ -22,7 +35,7 @@ This directory contains a small example dataset for demonstrating EpigenicR func
 **Format**: Unscaled BigWig
 
 ### QC Statistics
-- `stats_summary.txt` - Tab-delimited QC statistics table with columns:
+- `minute_output/reports/stats_summary.txt` - Tab-delimited QC statistics table with columns:
   - map_id, library, barcode
   - raw_demultiplexed, raw_mapped, mapq_mapped
   - dedup_mapped, final_mapped, library_size
@@ -41,7 +54,11 @@ library(EpigenicR)
 
 # Get toy BigWig file paths
 toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
-bw_files <- list.files(toy_dir, pattern = "\\.bw$", full.names = TRUE)
+bw_files <- list.files(
+  file.path(toy_dir, "minute_output", "bigwig"),
+  pattern = "\\.bw$",
+  full.names = TRUE
+)
 
 # Load pre-computed R data objects
 data(toy_metadata)
@@ -67,15 +84,16 @@ print(qc_plot)
 ```r
 # List available BigWig files
 toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
-list.files(toy_dir, pattern = "\\.bw$")
+list.files(file.path(toy_dir, "minute_output", "bigwig"), pattern = "\\.bw$")
 
 # Get specific file path
 bw_file <- system.file("extdata", "toy_dataset", 
-                       "Proj1_A1_5mC_1_SAMPLE-0008_pooled.hg38.unscaled.bw", 
+                       "minute_output", "bigwig",
+                       "Proj1_A1_5mC_1_SAMPLE-0008_rep1.hg38.unscaled.bw", 
                        package = "EpigenicR")
 
 # Load stats summary directly from file
-stats_file <- system.file("extdata", "toy_dataset", "stats_summary.txt", 
+stats_file <- system.file("extdata", "toy_dataset", "minute_output", "reports", "stats_summary.txt", 
                           package = "EpigenicR")
 stats <- read.table(stats_file, header = TRUE, sep = "\t")
 ```

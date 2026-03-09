@@ -46,19 +46,84 @@ devtools::install()
 
 For developers working on the package:
 
+### Development Workflow
+
 ```r
-# Load package for development
+# Load package for development (fastest way to test)
 devtools::load_all("/path/to/EpigenicR")
 
-# Run checks
-devtools::check()
+# Test with toy data
+data(toy_genes)
+epk <- create_epk(
+  pipeline_output_path = system.file("extdata", "toy_dataset", package = "EpigenicR"),
+  annotations = toy_genes
+)
+print(epk)
+```
 
-# Build documentation
+### Full Testing Workflow
+
+```r
+setwd("/path/to/EpigenicR")
+
+# Generate documentation from roxygen comments
 devtools::document()
+
+# Run package checks (catches errors/warnings)
+devtools::check()
 
 # Run tests
 devtools::test()
+
+# Build and install for real
+devtools::install()
 ```
+
+### Testing the create_epk() Wrapper (epk-wrapper branch)
+
+The `epk-wrapper` branch introduces the simplified `create_epk()` function:
+
+```bash
+# Switch to the feature branch
+git checkout epk-wrapper
+```
+
+```r
+# Load and test
+devtools::load_all()
+
+# Path mode (auto-discovery from minute_output/)
+data(toy_genes)
+ty48_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
+epk_path <- create_epk(
+  pipeline_output_path = toy_dir,
+  annotations = toy_genes
+)
+
+# Validation checkpoint (should pass)
+print(epk_path)
+
+# Test validation failure scenario
+data(toy_genes)
+bw_files <- list.files(
+  file.path(toy_dir, "minute_output", "bigwig"),
+  pattern = "\\.bw$",
+  full.names = TRUE
+)
+stats_bad <- read.table(
+  file.path(toy_dir, "minute_output", "reports", "stats_summary.txt"),
+  header = TRUE, sep = "\\t"
+)[-1, ]  # Remove first sample to break map_id matching
+
+# This should error with clear message
+try(create_epk(
+  bw_files = bw_files,
+  annotations = toy_genes,
+  stats_summary = stats_bad
+))
+```
+
+See [inst/scripts/CREATE_EPK_USAGE.md](inst/scripts/CREATE_EPK_USAGE.md) for more examples.
 
 ## Getting Help
 

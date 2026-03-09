@@ -57,7 +57,23 @@ install.packages(c("DT", "reactable", "htmltools", "ComplexHeatmap"))
 
 ## Installing EpigenicR
 
-### From local source
+### For Development (Recommended during testing)
+
+Use `devtools::load_all()` to load functions without installing:
+
+```r
+library(devtools)
+load_all("/Users/nimra236/Dropbox/Epigenica/Projects/EpigenicR")
+
+# Test with toy data
+data(toy_genes)
+epk <- create_epk(
+  pipeline_output_path = system.file("extdata", "toy_dataset", package = "EpigenicR"),
+  annotations = toy_genes
+)
+```
+
+### From local source (Persistent installation)
 
 ```r
 # Install devtools if needed
@@ -66,16 +82,26 @@ if (!require("devtools", quietly = TRUE))
 
 # Install from package directory
 devtools::install_local("/Users/nimra236/Dropbox/Epigenica/Projects/EpigenicR")
+
+# Restart R session before using
+library(EpigenicR)
 ```
 
-### Building documentation
+### Building and testing
 
-After installing all dependencies, regenerate documentation:
+After installing all dependencies:
 
 ```r
-# Navigate to package directory in terminal, then:
 setwd("/Users/nimra236/Dropbox/Epigenica/Projects/EpigenicR")
-roxygen2::roxygenise()
+
+# Generate documentation from roxygen comments
+devtools::document()
+
+# Check for errors
+devtools::check()
+
+# Run tests
+devtools::test()
 ```
 
 Or use devtools:

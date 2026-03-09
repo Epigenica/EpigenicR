@@ -32,9 +32,9 @@ devtools::install_local("/path/to/EpigenicR")
 
 ## Overview
 
-
 EpigenicR provides tools for:
 
+- **Simplified EPK creation**: `create_epk()` wrapper for streamlined EPK object creation
 - **Metadata management**: Extract and organize sample information from BigWig filenames
 - **Quality control**: Visualize QC statistics across markers, conditions, and replicates
 - **Annotation retrieval**: Download and process GTF/BED files for genomic features
@@ -45,19 +45,72 @@ EpigenicR provides tools for:
 ## Quick Start
 ### Dataset Contents
 
-- **6 BigWig files**: Chromatin (H3K4me3, H3K27ac, INPUT) and methylation (5mC) profiles from real samples
-- **SAMPLE-0008**: 5mC, H3K27ac, H3K4me3 (3 markers)
-- **SAMPLE-0054**: 5mC, INPUT, H3K4me3 (3 markers)
-- **stats_summary.txt**: QC statistics table with read counts, duplication rates, and library sizes
-- **toy_metadata**: Pre-extracted metadata from filenames (available as R data object)
-- **toy_stats_summary**: Processed QC statistics (available as R data object)
-- **toy_genes**: Example gene coordinates on chr22 for testing (available as R data object)
+Stored in `minute_output/` structure (matching EpiFinder pipeline output):
 
-**Markers**: 5mC, H3K4me3, H3K27ac, INPUT
-**Genome**: hg38 (unscaled BigWig format)
-**Total size**: ~13 MB
+```
+inst/extdata/toy_dataset/
+└── minute_output/
+    ├── bigwig/
+    │   └── 8 BigWig files (rep1 naming: *.rep1.hg38.unscaled.bw)
+    └── reports/
+        └── stats_summary.txt
+```
+
+- **8 BigWig files**: Chromatin (H3K4me3, H3K27ac, INPUT) and methylation (5mC) profiles
+  - **SAMPLE-0008**: 5mC, H3K27ac, H3K4me3 (3 markers)
+  - **SAMPLE-0054**: 5mC, INPUT, H3K4me3 (3 markers)
+- **stats_summary.txt**: QC statistics with `map_id` column matching BigWig filenames
+- **toy_metadata**: Pre-extracted metadata from filenames (R data object)
+- **toy_stats_summary**: Processed QC statistics (R data object)
+- **toy_genes**: Example gene coordinates on chr22 (R data object)
+
+**Markers**: 5mC, H3K4me3, H3K27ac, INPUT | **Genome**: hg38 | **Format**: unscaled BigWig | **Total**: ~13 MB
+
+### 0. Quick Start: Create EPK Directly
+
+The simplest way to create an EPK object from pipeline output is to provide the path to the project directory containing the `minute_output/` structure and annotations (for example, `toy_genes`).
+The function automatically discovers BigWig files and QC statistics based on the expected directory structure and file naming conventions shown above.
+You can also provide BigWig files and the QC statistics table explicitly, as shown in the second example below.
+
+```r
+library(EpigenicR)
+
+# Path mode (auto-discovers files from minute_output/ structure)
+data(toy_genes)  # Load example annotations
+epk <- create_epk(
+  pipeline_output_path = "/path/to/project",  # Contains minute_output/
+  annotations = toy_genes
+)
+print(epk)
+```
+
+Or with explicit files:
+
+```r
+toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
+bw_files <- list.files(
+  file.path(toy_dir, "minute_output", "bigwig"),
+  pattern = "\\.bw$",
+  full.names = TRUE
+)
+stats_summary <- read.table(
+  file.path(toy_dir, "minute_output", "reports", "stats_summary.txt"),
+  header = TRUE, sep = "\\t", stringsAsFactors = FALSE
+)
+
+epk <- create_epk(
+  bw_files = bw_files,
+  annotations = toy_genes,
+  stats_summary = stats_summary
+)
+```
+
+See [inst/scripts/CREATE_EPK_USAGE.md](inst/scripts/CREATE_EPK_USAGE.md) for comprehensive examples.
 
 ### 1. Extract Metadata from BigWig Files
+
+`create_metadata_df()` is optimized for Epigenica/EpiFinder naming convention (for example, `Proj1_A1_H3K4me3_1_SAMPLE-0008_rep1.hg38.unscaled.bw`).
+Using this convention ensures consistent extraction of `project_id`, `batch`, `marker`, `sample_id`, and `replicate`.
 
 ```r
 library(EpigenicR)
@@ -69,23 +122,25 @@ bw_files <- c(
   "project1_batch1_H3K9me3_rerun_sample2_rep1.hg38.scaled.bw"
 )
 # or use list.files() to get actual files from a directory
-bw_files <- list.files("inst/extdata/toy_dataset/", pattern = "\\.bw$", full.names = TRUE)
+bw_files <- list.files("minute_output/bigwig/", pattern = "\\.bw$", full.names = TRUE)
 
 metadata <- create_metadata_df(bw_files = bw_files)
 print(metadata)
 # A tibble: 6 × 10
 #   bw_file                project_id batch marker rerun_id sample_id replicate genome scaling matched
 #   <chr>                  <chr>      <chr> <chr>  <chr>    <chr>     <chr>     <chr>  <chr>   <lgl>
-# 1 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… pooled    hg38   unscal… TRUE
-# 2 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… pooled    hg38   unscal… TRUE
-# 3 Proj1_A1_H3K27ac_1_SA… Proj1      A1    H3K27… 1        SAMPLE-0… pooled    hg38   unscal… TRUE
-# 4 Proj1_A1_INPUT_1_SAMP… Proj1      A1    INPUT  1        SAMPLE-0… pooled    hg38   unscal… TRUE
-# 5 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… pooled    hg38   unscal… TRUE
-# 6 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… pooled    hg38   unscal… TRUE
+# 1 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… rep1      hg38   unscal… TRUE
+# 2 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… rep1      hg38   unscal… TRUE
+# 3 Proj1_A1_H3K27ac_1_SA… Proj1      A1    H3K27… 1        SAMPLE-0… rep1      hg38   unscal… TRUE
+# 4 Proj1_A1_INPUT_1_SAMP… Proj1      A1    INPUT  1        SAMPLE-0… rep1      hg38   unscal… TRUE
+# 5 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… rep1      hg38   unscal… TRUE
+# 6 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… rep1      hg38   unscal… TRUE
 ```
 
 ### 2. Download Genomic Annotations
-Here you donwload and create BED files for genomic features (genes, CpG islands) and retrieve chormatin states from Epigenome Roadmap. Note that chromatin states can be different for each project here we are using E107 (Skeletal Muscle Male) as an example. Check here for the full list of available chromatin state annotations and additional information [here](https://egg2.wustl.edu/roadmap/web_portal/chr_state_learning.html).
+Here you download and create BED files for genomic features (genes, CpG islands) and retrieve chromatin states from Epigenome Roadmap.
+Chromatin states can differ by project; here we use E107 (Skeletal Muscle Male) as an example.
+See the full list of available chromatin state annotations and additional information [here](https://egg2.wustl.edu/roadmap/web_portal/chr_state_learning.html).
 
 ```r
 # Ensure GTF file and generate BED files for genes and TSS regions
@@ -97,7 +152,7 @@ annotation_paths <- ensure_gtf_and_beds(
 )
 
 # Download ChromHMM annotations
-# Creatge the folder for chromHMM annotations
+# Create the folder for ChromHMM annotations
 
 download_chromhmm_annotations(
   annotations = c("E107_15_coreMarks_hg38lift_mnemonics.bed"),
@@ -124,14 +179,21 @@ stats_summary <- data.frame(
   mapped_reads = runif(9, 8e5, 4.5e6),
   library_size = runif(9, 7e5, 4e6)
 )
-# Or load from actual QC summary tables generated during processing
-stats_summary <- read.csv(file.path("inst/extdata/toy_dataset/stats_summary.txt"), sep = "\t", header = T)
+# Or load from actual QC summary tables generated during pipeline
+stats_summary <- read.csv(
+  file.path("minute_output/reports/stats_summary.txt"),
+  sep = "\t", header = TRUE
+)
+
+# Or load QC table directly from a saved EPK object
+epk_loaded <- readRDS("data/project.epk.rds")
+stats_summary <- epk_loaded$tables$stats_summary
 # Add fraction mapped
 stats_summary <- as_tibble(stats_summary) %>% mutate(frac_mapped = stats_summary$raw_mapped/stats_summary$raw_demultiplexed)
 # Remove frac_mapq_filtered column if exists
 stats_summary <- stats_summary %>% select(-frac_mapq_filtered)
 
-# Extract markers infromation and metadata from map_id column created by the pipeline
+# Extract marker information and metadata from map_id column created by the pipeline
 stats_summary <- stats_summary %>%
   mutate(create_metadata_df(map_id_vector = stats_summary$map_id, bw_files = bw_files)[,c("marker","sample_id","batch")], sample_id_rep = paste0(sample_id, '_', batch))
 
@@ -163,365 +225,88 @@ qc_interactive
 
   *QC plot showing final mapped reads, library size, and duplication rate for toy dataset samples.*
 
-  ### 4. Create an EPK Object
+### 4. Create, Save, and Load an EPK Object
 
-  EPK (EpiPeaK) objects bundle together:
-  - MultiAssayExperiment with multiple genomic feature sets; RPGC values in dataframe format based on provided features coordinates and BigWig files (e.g., genes, CpG islands).
-- QC statistics tables; `stats_summary` data frame containing QC metrics for each sample/marker.
-- Enrichment results; chromatin state enrichment and profile enrichment tables for each marker/feature set.  For this part you will need to run `wigglescout::plot_bw_loci_summary_heatmap()` and `wigglescout::plot_bw_profile()` functions on your project data and save the results as .csv files in the appropriate directory structure.  You can find examples below and in the `inst/scripts/wigglescout_script.R` script.
-- Provenance information; creation timestamp and session info for reproducibility.
-
-EpiPeaK objects are designed to facilitate downstream analysis and visualization of epigenomic data in a structured format.  
-<img src="man/figures/EpiPeaK_Obj_illustration.png" width="100%" />
-
-
-#### Prerequisites
-Before creating an EPK object, ensure you have:
-  - BigWig files (`bw_files`)
-- Genomic feature coordinates (e.g., `genes_coord_protein_coding`, `cpg_islands`)
-- Marker names vector (`markers`)
-- QC statistics table (`stats_summary` from step 3)
-- Project directory path (`proj_dir`) for enrichment results
-
-#### Creating Genomic Feature GRanges
-
-Before processing BigWig files, you need to prepare GRanges objects for genomic features:
-
-  ```r
-library(GenomicRanges)
-library(dplyr)
-
-# ---- Create protein-coding genes GRanges ----
-
-# Path to genes BED file (created by ensure_gtf_and_beds())
-genes_coord <- "data/genes.hg38.bed"
-
-# Read BED file and filter for protein-coding genes
-genes_coord_protein_coding <- genes_coord %>%
-  read.table(sep = "\t", header = FALSE, stringsAsFactors = FALSE) %>%
-  filter(V8 == "protein_coding") %>%
-  select(V1, V2, V3, V4, V5, V7) %>%
-  as.data.frame() %>%
-  GenomicRanges::makeGRangesFromDataFrame(
-    seqnames.field = "V1",
-    start.field = "V2",
-    end.field = "V3",
-    strand.field = "V7",
-    keep.extra.columns = TRUE
-  )
-
-# Remove duplicated regions
-k_in <- paste0(seqnames(genes_coord_protein_coding), ":",
-               start(genes_coord_protein_coding), "-",
-               end(genes_coord_protein_coding))
-genes_coord_protein_coding <- genes_coord_protein_coding[!duplicated(k_in)]
-
-# Rename genes_coord_protein_coding columns (V4 = gene_name, V5 = gene_id)
-colnames(mcols(genes_coord_protein_coding)) <- c("gene_name", "gene_id")
-
-# ---- Create CpG islands GRanges ----
-
-# Path to CpG islands BED file
-# Download from UCSC: https://genome.ucsc.edu/cgi-bin/hgTables
-# Or use wget:
-# system("wget -O data/cpg_islands.hg38.bed.gz 'http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/cpgIslandExt.txt.gz'")
-cpg_coord_gz <- "data/cpg_islands.hg38.bed.gz"
-cpg_coord <- gsub(cpg_coord, pattern = "\\.gz$", replacement = "")
-# gunzip
-R.utils::gunzip(
-  cpg_coord,
-  destname = cpg_coord,
-  overwrite = TRUE,
-  remove = TRUE
-)
-# Read BED file and create GRanges
-cpg_islands <- cpg_coord %>%
-  read.table(sep = "\t", header = FALSE, stringsAsFactors = FALSE) %>%
-  as.data.frame() %>%
-  select(V2, V3, V4, V5) %>%
-  GenomicRanges::makeGRangesFromDataFrame(
-    seqnames.field = "V2",
-    start.field = "V3",
-    end.field = "V4",
-    keep.extra.columns = TRUE
-  )
-
-# Rename cpg_islands column and create unique IDs
-colnames(mcols(cpg_islands)) <- c("cpg_id")
-cpg_islands$cpg_id <- paste(cpg_islands$cpg_id,
-                            seqnames(cpg_islands),
-                            start(cpg_islands),
-                            end(cpg_islands),
-                            sep = "_")
-
-# ---- Other feature types (optional) ----
-
-# TSS ±2kb regions
-tss_2k  <- promoters(genes_coord_protein_coding, upstream = 2000, downstream = 2000)
-# Remove duplicated regions
-k_in <- paste0(seqnames(tss_2k), ":",
-               start(tss_2k), "-",
-               end(tss_2k))
-tss_2k <- tss_2k[!duplicated(k_in)]
-
-# Verify GRanges objects
-print(genes_coord_protein_coding)
-# GRanges object with 5 ranges and 3 metadata columns:
-#       seqnames            ranges strand |   gene_name         gene_id      gene_type
-#          <Rle>         <IRanges>  <Rle> | <character>     <character>    <character>
-#  [1]    chr22 10500000-10510000      + |        TOY1 ENSG00000000001 protein_coding
-#  [2]    chr22 10600000-10610000      - |        TOY2 ENSG00000000002 protein_coding
-#  [3]    chr22 10700000-10710000      + |        TOY3 ENSG00000000003 protein_coding
-#  [4]    chr22 10800000-10810000      + |        TOY4 ENSG00000000004 protein_coding
-#  [5]    chr22 10900000-10910000      - |        TOY5 ENSG00000000005 protein_coding
-#  -------
-#  seqinfo: 1 sequence from an unspecified genome; no seqlengths
-print(cpg_islands)
-# GRanges object with 32038 ranges and 1 metadata column:
-#                         seqnames              ranges strand |                 cpg_id
-#                            <Rle>           <IRanges>  <Rle> |            <character>
-#       [1]                   chr1 155188536-155192004      * | CpG:_361_chr1_155188..
-#       [2]                   chr1     2226773-2229734      * | CpG:_366_chr1_222677..
-#       [3]                   chr1   36306229-36307408      * | CpG:_110_chr1_363062..
-#       [4]                   chr1   47708822-47710847      * | CpG:_164_chr1_477088..
-#       [5]                   chr1   53737729-53739637      * | CpG:_221_chr1_537377..
-#       ...                    ...                 ...    ... .                    ...
-#   [32034] chr22_KI270734v1_ran..       131009-132049      * | CpG:_102_chr22_KI270..
-#   [32035] chr22_KI270734v1_ran..       161256-161626      * | CpG:_55_chr22_KI2707..
-#   [32036] chr22_KI270735v1_ran..         17220-18098      * | CpG:_100_chr22_KI270..
-#   [32037] chr22_KI270738v1_ran..           4412-5280      * | CpG:_80_chr22_KI2707..
-#   [32038] chr22_KI270738v1_ran..           6225-6467      * | CpG:_34_chr22_KI2707..
-#   -------
-#   seqinfo: 423 sequences from an unspecified genome; no seqlengths
-```
-
-#### Step-by-step EPK Creation
-This includes:
-  - Processing BigWig files per marker using `wigglescout::bw_loci()` and feature set (genes, CpG islands, etc.).
-  - Creating assay matrices for each marker and feature set.
-  - Building SummarizedExperiment objects.
-  - Assembling MultiAssayExperiment.
-  - Loading enrichment results.
-  - Creating and saving EPK object.
-  - Saving summary of the minute-chip pipeline consisting of data such as total reads, mapped reads, duplication rate, etc. is stored in the `stats_summary` table within the EPK object for easy access and visualization.
-
-**Note that the annotation files downloaded above can be used in form of genomic coordinates (GRanges) to extract signal values from BigWig files for each marker and feature set.**
-
+`create_epk()` is the recommended way to build EPK objects. It supports one annotation or multiple feature annotations (for example protein-coding genes, CpG islands, enhancers).
 
 ```r
-library(wigglescout)
-library(SummarizedExperiment)
+library(EpigenicR)
 library(MultiAssayExperiment)
 
-proj_dir <- "."  # Adjust to your project directory containing results
+toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
+data(toy_genes)
 
-# ---- Step 4a: Process BigWig files per marker and feature set ----
-
-# Initialize assay lists for each feature type
-assay_list_protein_coding <- list()
-assay_list_tss_2k <- list()
-assay_list_cpg_islands <- list()
-
-# Define markers to process (exclude INPUT control)
-excluded_markers <- c("INPUT")
-markers_to_run <- setdiff(markers, excluded_markers)
-
-# Process each marker
-for (mk in markers_to_run) {
-  message("Processing marker: ", mk)
-
-  # Filter BigWig files for current marker
-  idx <- grep(pattern = mk, x = bw_files, perl = TRUE)
-  bw_files_tmp <- bw_files[idx]
-
-  # Select pooled samples (for projects without replicates) OR individual replicates
-  # Adjust pattern based on your naming convention:
-  #   - 'pooled': for projects without replicates
-  #   - 'rep[0-9]+': for projects with replicates (use invert = TRUE)
-  idx <- grep(x = bw_files_tmp, pattern = 'pooled', perl = TRUE, invert = FALSE)
-  bw_files_marker <- bw_files_tmp[idx]
-
-  # Create sample labels from metadata
-  smpl_mixed_name_df <- create_metadata_df(bw_files = bw_files_marker)
-  smpl_mixed_name_marker <- paste0(
-    smpl_mixed_name_df$sample_id, '_',
-    smpl_mixed_name_df$replicate, '_',
-    smpl_mixed_name_df$batch
-  )
-
-  # Process protein-coding genes
-  message("  - Processing protein-coding genes")
-  bw_gr_marker <- wigglescout::bw_loci(
-    bwfiles = bw_files_marker,
-    loci = genes_coord_protein_coding,
-    labels = smpl_mixed_name_marker
-  )
-  colnames(mcols(bw_gr_marker)) <- gsub(
-    x = smpl_mixed_name_marker,
-    pattern = '\\.',
-    replacement = '-'
-  )
-  m <- as.matrix(S4Vectors::mcols(bw_gr_marker)[, smpl_mixed_name_marker, drop = FALSE])
-  storage.mode(m) <- 'numeric'
-  assay_list_protein_coding[[mk]] <- m
-
-  # Process tss_2k
-  message("  - tss_2k protein-coding genes")
-  bw_gr_marker <- wigglescout::bw_loci(
-    bwfiles = bw_files_marker,
-    loci = tss_2k,
-    labels = smpl_mixed_name_marker
-  )
-  colnames(mcols(bw_gr_marker)) <- gsub(
-    x = smpl_mixed_name_marker,
-    pattern = '\\.',
-    replacement = '-'
-  )
-  m <- as.matrix(S4Vectors::mcols(bw_gr_marker)[, smpl_mixed_name_marker, drop = FALSE])
-  storage.mode(m) <- 'numeric'
-  assay_list_tss_2k[[mk]] <- m
-
-  # Process CpG islands
-  message("  - Processing CpG islands")
-  bw_gr_marker <- wigglescout::bw_loci(
-    bwfiles = bw_files_marker,
-    loci = cpg_islands,
-    labels = smpl_mixed_name_marker
-  )
-  colnames(mcols(bw_gr_marker)) <- gsub(
-    x = smpl_mixed_name_marker,
-    pattern = '\\.',
-    replacement = '-'
-  )
-  m <- as.matrix(S4Vectors::mcols(bw_gr_marker)[, smpl_mixed_name_marker, drop = FALSE])
-  storage.mode(m) <- 'numeric'
-  assay_list_cpg_islands[[mk]] <- m
-}
-
-# ---- Step 4b: Create SummarizedExperiment objects ----
-
-# Prepare column metadata
-ref_cols <- smpl_mixed_name_marker
-coldata <- S4Vectors::DataFrame(sample_id = ref_cols, row.names = ref_cols)
-
-# SummarizedExperiment for protein-coding genes
-se_protein_coding <- SummarizedExperiment::SummarizedExperiment(
-  assays = assay_list_protein_coding,
-  rowRanges = genes_coord_protein_coding,
-  colData = coldata
-)
-rownames(se_protein_coding) <- genes_coord_protein_coding$gene_name
-
-# SummarizedExperiment for tss_2k protein-coding genes
-
-se_tss_2k_protein_coding <- SummarizedExperiment::SummarizedExperiment(
-  assays = assay_list_tss_2k,
-  rowRanges = tss_2k,
-  colData = coldata
-)
-rownames(se_tss_2k_protein_coding) <- tss_2k$gene_name
-
-
-# SummarizedExperiment for CpG islands
-se_cpg_islands <- SummarizedExperiment::SummarizedExperiment(
-  assays = assay_list_cpg_islands,
-  rowRanges = cpg_islands,
-  colData = coldata
-)
-rownames(se_cpg_islands) <- cpg_islands$cpg_id
-
-# ---- Step 4c: Create MultiAssayExperiment ----
-
-objlist <- list(
-  "protein_coding" = se_protein_coding,
-  "cpg" = se_cpg_islands
-)
-mse <- MultiAssayExperiment::MultiAssayExperiment(
-  experiments = objlist,
-  colData = coldata
-)
-
-# ---- Step 4d: Load enrichment results ----
-# enrichment_results should be a list of data frames containing enrichment results for chromatin states and profiles, generated from wigglescout functions and saved as .csv files in your project directory. check the `inst/scripts/wigglescout_script.R` for examples on how to generate and save these results.
-data("enrichment_results")
-# profile_results should be a list of data frames containing profile enrichment results for each marker/feature set, generated from wigglescout functions and saved as .csv files in your project directory. check the `inst/scripts/wigglescout_script.R` for examples on how to generate and save these results.
-data("profile_results")
-
-# ---- Step 4e: Build final EPK object ----
-
-epk <- structure(
-  list(
-    mse = mse,                                  # Multi-assay data
-    tables = list(
-      stats_summary = stats_summary             # QC statistics
-    ),
-    enrichment_results = list(
-      chromatin_states = enrichment_results,    # Enrichment tables
-      enrichment_profile = profile_results      # Profile data
-    ),
-    provenance = list(
-      created = Sys.time(),                     # Creation timestamp
-      session = sessionInfo()                   # Session info
-    )
-  ),
-  class = "EPK"
+# Simple path mode
+epk <- create_epk(
+  pipeline_output_path = toy_dir,
+  annotations = toy_genes
 )
 
 # Save EPK object
-saveRDS(epk, "data/project.epk.rds")
-message("EPK object saved successfully!")
-print(epk)
+saveRDS(epk, file = "data/project.epk.rds")
+
+# Load EPK object later
+epk_loaded <- readRDS("data/project.epk.rds")
+print(epk_loaded)
 # EPK object
 # -----------
-#   * Experiments:
-#   - protein_coding: 19954 features × 2 samples, 3 assays
-# - cpg: 32038 features × 2 samples, 3 assays
+# * Experiments:
+#   - primary_annotation: 5 features × 2 samples, 3 assays
 # * Tables:
-#   - stats_summary: 8 rows × 17 cols
+#   - stats_summary: 8 rows × 13 cols
 # * Enrichment results: 2 tables
-# * Created: 2026-03-06 17:55:12
+# * Created: 2026-03-09 21:19:56
 ```
 
-#### Loading and Inspecting EPK Objects
+#### Multiple BED files in one EPK
 
 ```r
-# Load an existing EPK object
-epk <- readRDS("project.epk.rds")
+epk_multi <- create_epk(
+  pipeline_output_path = toy_dir,
+  annotations = list(
+    protein_coding = "data/protein_coding.bed",
+    cpg_islands = "data/cpg_islands.bed",
+    enhancer = "data/enhancer.bed"
+  )
+)
 
-# Print summary
-print(epk)
-# EPK object
-# -----------
-#   * Experiments:
-#   - protein_coding: 19954 features × 2 samples, 3 assays
-# - cpg: 32038 features × 2 samples, 3 assays
-# * Tables:
-#   - stats_summary: 8 rows × 17 cols
-# * Enrichment results: 2 tables
-# * Created: 2026-03-06 17:55:12
+names(MultiAssayExperiment::experiments(epk_multi$mse))
+# [1] "protein_coding" "cpg_islands" "enhancer"
+```
 
-# Access components
-mse <- epk$mse
-stats <- epk$tables$stats_summary
-enrichment <- epk$enrichment_results
+#### Add new features to `mse` slot after creation
 
-# View available experiments
-names(MultiAssayExperiment::experiments(mse))
+```r
+# Add new features directly to an existing EPK object
+epk_loaded <- add_features_to_epk(
+  epk = epk_loaded,
+  pipeline_output_path = toy_dir,
+  annotations = list(
+    enhancer = "data/enhancer.bed",
+    cpg_islands = "data/cpg_islands.bed"
+  )
+)
 
-# Access specific experiment
-protein_coding_se <- mse[["protein_coding"]]
+# Optionally replace existing experiment names
+# epk_loaded <- add_features_to_epk(
+#   epk = epk_loaded,
+#   pipeline_output_path = toy_dir,
+#   annotations = list(primary_annotation = "data/updated_features.bed"),
+#   overwrite = TRUE
+# )
 
-# View available markers (assays)
-SummarizedExperiment::assayNames(protein_coding_se)
+names(MultiAssayExperiment::experiments(epk_loaded$mse))
 ```
 
 ### 5. Compute Sample Correlations
 
+Use `compute_all_cor()` on an experiment in the `mse` slot (for example `primary_annotation`, `protein_coding`, or `cpg_islands`).
+
 ```r
 # Compute correlations for all markers in a specific experiment
 cor_matrices <- compute_all_cor(
-  mse = epk$mse,
-  exp_name = "protein_coding",
+  mse = epk_loaded$mse,
+  exp_name = "primary_annotation",
   method = "pearson",
   transform = "log1p"
 )
