@@ -20,7 +20,7 @@ Complete toy dataset included for testing and examples:
 * **6 BigWig files**: Real chromatin (H3K4me3, H3K27ac, INPUT) and methylation (5mC) profiles from two samples (SAMPLE-0008, SAMPLE-0054)
 * **toy_metadata**: Pre-extracted metadata from filenames (6 files)
 * **toy_stats_summary**: QC statistics with read counts, duplication rates, and library sizes (8 samples)
-* **toy_genes**: Example gene coordinates on chr22 for testing (5 genes)
+* **toy_genes**: Example gene coordinates on chr22 for testing (5 genes); to show the genomic ranges format only  
 * **enrichment_results**: Chromatin state enrichment data for 3 markers (H3K4me3, H3K27ac, 5mC)
 * **profile_results**: Signal enrichment profiles around TSS and CpG islands
 * **project.epk.rds**: Example EPK object demonstrating the final data structure
