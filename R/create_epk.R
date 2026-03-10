@@ -37,6 +37,11 @@
 #'   annotation is provided, defaults to \code{"protein_coding"}. If a named list
 #'   of annotations is provided, uses the list names.
 #'
+#' @param sample_metadata Optional data frame with columns \code{marker},
+#'   \code{sample_id}, and \code{replicate}. One row per BigWig file (in same order as
+#'   \code{bw_files}). If provided, overrides automatic marker extraction from filenames.
+#'   Useful for non-standard naming conventions. Default: \code{NULL} (auto-extract).
+#'
 #' @return An \code{EPK} object (S3 class) with slots:
 #'   \itemize{
 #'     \item \code{mse}: \code{MultiAssayExperiment} with one \code{SummarizedExperiment} per experiment
@@ -103,6 +108,19 @@
 #'   ),
 #'   stats_summary = stats_summary
 #' )
+#'
+#' # Example 4: Non-standard naming with explicit sample_metadata
+#' metadata <- data.frame(
+#'   marker = c("INPUT", "INPUT", "H3K4me3", "H3K4me3"),
+#'   sample_id = c("Donor1_S1", "Donor1_S2", "Donor1_S1", "Donor1_S2"),
+#'   replicate = c("pooled", "rep1", "pooled", "rep1")
+#' )
+#' epk <- create_epk(
+#'   bw_files = bw_files,
+#'   annotations = toy_genes,
+#'   stats_summary = stats_summary,
+#'   sample_metadata = metadata
+#' )
 #' }
 #'
 #' @importFrom S4Vectors DataFrame mcols
@@ -116,7 +134,8 @@ create_epk <- function(
   pipeline_output_path = NULL,
   genome = "hg38",
   markers_to_exclude = c("INPUT"),
-  experiment_names = NULL
+  experiment_names = NULL,
+  sample_metadata = NULL
 ) {
 
   # ===== INPUT VALIDATION =====
@@ -217,7 +236,35 @@ create_epk <- function(
 
   # ===== EXTRACT MARKER NAMES FROM BIGWIG FILES =====
   message("Extracting marker information from BigWig filenames...")
-  bw_metadata <- .extract_marker_metadata(bw_files)
+  
+  if (!is.null(sample_metadata)) {
+    # Validate user-provided metadata
+    required_cols <- c("marker", "sample_id", "replicate")
+    if (!all(required_cols %in% names(sample_metadata))) {
+      stop(
+        "'sample_metadata' must have columns: ",
+        paste(required_cols, collapse = ", ")
+      )
+    }
+    
+    # Ensure it aligns with bw_files
+    if (nrow(sample_metadata) != length(bw_files)) {
+      stop(
+        "'sample_metadata' must have one row per BigWig file. ",
+        "Expected ", length(bw_files), " rows, got ", nrow(sample_metadata)
+      )
+    }
+    
+    bw_metadata <- data.frame(
+      bw_file = basename(bw_files),
+      sample_metadata,
+      stringsAsFactors = FALSE
+    )
+    message("Using user-provided sample metadata.")
+  } else {
+    # Use default extraction from filenames
+    bw_metadata <- .extract_marker_metadata(bw_files)
+  }
 
   # Determine unique markers to process
   unique_markers <- setdiff(unique(bw_metadata$marker), markers_to_exclude)
@@ -373,23 +420,23 @@ create_epk <- function(
   }
 
   bw_base <- basename(bw_files)
-  bw_pattern <- "_rep[0-9]+\\.[^.]+\\.(unscaled|scaled)\\.bw$"
+  bw_pattern <- "_(pooled|rep[0-9]+)\\.[^.]+\\.(unscaled|scaled)\\.bw$"
   invalid_bw <- bw_base[!grepl(bw_pattern, bw_base)]
   if (length(invalid_bw) > 0) {
     stop(
       "Invalid BigWig filename format. Expected pattern: ",
-      "(.*_rep[0-9].genome.[unscaled|scaled].bw)\n",
+      "(.*_(pooled|rep[0-9]+).genome.(unscaled|scaled).bw)\n",
       "Invalid file(s):\n  ",
       paste(invalid_bw, collapse = "\n  ")
     )
   }
 
-  map_id_pattern <- "_rep[0-9]+\\.[^.]+$"
+  map_id_pattern <- "_(pooled|rep[0-9]+)\\.[^.]+$"
   invalid_map_id <- stats_summary$map_id[!grepl(map_id_pattern, stats_summary$map_id)]
   if (length(invalid_map_id) > 0) {
     stop(
       "Invalid map_id format in stats_summary. Expected pattern: ",
-      "(.*_rep[0-9].genome)\n",
+      "(.*_(pooled|rep[0-9]+).genome)\n",
       "Invalid map_id value(s):\n  ",
       paste(unique(invalid_map_id), collapse = "\n  ")
     )
