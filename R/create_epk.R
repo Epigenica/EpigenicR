@@ -138,6 +138,127 @@ create_epk <- function(
   sample_metadata = NULL
 ) {
 
+  # ---------- local helpers ----------
+  .prepare_bw_metadata <- function(bw_files, sample_metadata = NULL) {
+    bw_base <- basename(bw_files)
+
+    if (is.null(sample_metadata)) {
+      out <- .extract_marker_metadata(bw_files)
+      out$bw_file <- bw_base
+      out <- out[, c("bw_file", "marker", "sample_id", "replicate"), drop = FALSE]
+      return(out)
+    }
+
+    required_cols <- c("marker", "sample_id", "replicate")
+    if (!all(required_cols %in% names(sample_metadata))) {
+      stop(
+        "'sample_metadata' must have columns: ",
+        paste(required_cols, collapse = ", ")
+      )
+    }
+
+    sm <- as.data.frame(sample_metadata, stringsAsFactors = FALSE)
+    sm$marker <- trimws(as.character(sm$marker))
+    sm$sample_id <- trimws(as.character(sm$sample_id))
+    sm$replicate <- trimws(as.character(sm$replicate))
+
+    if ("bw_file" %in% names(sm)) {
+      sm$bw_file <- basename(trimws(as.character(sm$bw_file)))
+
+      if (anyDuplicated(sm$bw_file)) {
+        dup <- unique(sm$bw_file[duplicated(sm$bw_file)])
+        stop(
+          "'sample_metadata$bw_file' contains duplicates:\n  ",
+          paste(dup, collapse = "\n  ")
+        )
+      }
+
+      missing_meta <- setdiff(bw_base, sm$bw_file)
+      extra_meta <- setdiff(sm$bw_file, bw_base)
+
+      if (length(missing_meta) > 0) {
+        stop(
+          "'sample_metadata$bw_file' is missing entries for:\n  ",
+          paste(missing_meta, collapse = "\n  ")
+        )
+      }
+      if (length(extra_meta) > 0) {
+        stop(
+          "'sample_metadata$bw_file' has entries not present in 'bw_files':\n  ",
+          paste(extra_meta, collapse = "\n  ")
+        )
+      }
+
+      ord <- match(bw_base, sm$bw_file)
+      out <- sm[ord, c("bw_file", "marker", "sample_id", "replicate"), drop = FALSE]
+    } else {
+      if (nrow(sm) != length(bw_files)) {
+        stop(
+          "'sample_metadata' must have one row per BigWig file when 'bw_file' is absent. ",
+          "Expected ", length(bw_files), " rows, got ", nrow(sm), "."
+        )
+      }
+      out <- data.frame(
+        bw_file = bw_base,
+        marker = sm$marker,
+        sample_id = sm$sample_id,
+        replicate = sm$replicate,
+        stringsAsFactors = FALSE
+      )
+    }
+
+    for (col in c("marker", "sample_id", "replicate")) {
+      bad <- is.na(out[[col]]) | out[[col]] == ""
+      if (any(bad)) {
+        stop("Invalid 'sample_metadata': column '", col, "' contains NA/empty values.")
+      }
+    }
+
+    out
+  }
+
+  .enrich_stats_summary_from_bw_metadata <- function(stats_summary, bw_metadata) {
+    if (is.null(stats_summary) || !"map_id" %in% names(stats_summary)) {
+      return(stats_summary)
+    }
+
+    bw_map_id <- sub("\\.(unscaled|scaled)\\.bw$", "", bw_metadata$bw_file)
+
+    md <- data.frame(
+      map_id = bw_map_id,
+      marker = bw_metadata$marker,
+      sample_id = bw_metadata$sample_id,
+      replicate = bw_metadata$replicate,
+      stringsAsFactors = FALSE
+    )
+
+    if (anyDuplicated(md$map_id)) {
+      md <- md[!duplicated(md$map_id), , drop = FALSE]
+      warning("Duplicate map_id values detected in bw metadata (e.g., scaled/unscaled pairs). Using first occurrence per map_id.")
+    }
+
+    ord <- match(stats_summary$map_id, md$map_id)
+
+    if (!"marker" %in% names(stats_summary)) {
+      stats_summary$marker <- md$marker[ord]
+    }
+    if (!"sample_id" %in% names(stats_summary)) {
+      stats_summary$sample_id <- md$sample_id[ord]
+    }
+    if (!"replicate" %in% names(stats_summary)) {
+      stats_summary$replicate <- md$replicate[ord]
+    }
+    if (!"sample_id_rep" %in% names(stats_summary)) {
+      stats_summary$sample_id_rep <- ifelse(
+        is.na(stats_summary$sample_id) | is.na(stats_summary$replicate),
+        NA_character_,
+        paste(stats_summary$sample_id, stats_summary$replicate, sep = "_")
+      )
+    }
+
+    stats_summary
+  }
+
   # ===== INPUT VALIDATION =====
   
   # Check that annotations is provided
@@ -236,42 +357,40 @@ create_epk <- function(
 
   # ===== EXTRACT MARKER NAMES FROM BIGWIG FILES =====
   message("Extracting marker information from BigWig filenames...")
-  
+  bw_metadata <- .prepare_bw_metadata(bw_files = bw_files, sample_metadata = sample_metadata)
+
   if (!is.null(sample_metadata)) {
-    # Validate user-provided metadata
-    required_cols <- c("marker", "sample_id", "replicate")
-    if (!all(required_cols %in% names(sample_metadata))) {
-      stop(
-        "'sample_metadata' must have columns: ",
-        paste(required_cols, collapse = ", ")
-      )
-    }
-    
-    # Ensure it aligns with bw_files
-    if (nrow(sample_metadata) != length(bw_files)) {
-      stop(
-        "'sample_metadata' must have one row per BigWig file. ",
-        "Expected ", length(bw_files), " rows, got ", nrow(sample_metadata)
-      )
-    }
-    
-    bw_metadata <- data.frame(
-      bw_file = basename(bw_files),
-      sample_metadata,
-      stringsAsFactors = FALSE
-    )
     message("Using user-provided sample metadata.")
-  } else {
-    # Use default extraction from filenames
-    bw_metadata <- .extract_marker_metadata(bw_files)
   }
+
+  # Enrich stats_summary for downstream plotting helpers
+  stats_summary <- .enrich_stats_summary_from_bw_metadata(stats_summary, bw_metadata)
 
   # Determine unique markers to process
   unique_markers <- setdiff(unique(bw_metadata$marker), markers_to_exclude)
+  unique_markers <- unique_markers[!is.na(unique_markers) & unique_markers != ""]
   if (length(unique_markers) == 0) {
-    stop("No markers to process after exclusions. Check 'markers_to_exclude'.")
+    stop("No markers to process after exclusions. Check 'markers_to_exclude' and metadata.")
   }
   message("Processing markers: ", paste(unique_markers, collapse = ", "))
+
+  # Enforce same sample set across markers for valid SummarizedExperiment assays
+  marker_samples <- lapply(unique_markers, function(m) sort(unique(bw_metadata$sample_id[bw_metadata$marker == m])))
+  names(marker_samples) <- unique_markers
+  ref <- marker_samples[[1]]
+  same_set <- vapply(marker_samples, function(x) identical(x, ref), logical(1))
+  if (!all(same_set)) {
+    details <- vapply(
+      names(marker_samples),
+      function(m) paste0(m, " [n=", length(marker_samples[[m]]), "]: ", paste(marker_samples[[m]], collapse = ", ")),
+      character(1)
+    )
+    stop(
+      "Markers do not share the same sample set, so assays would have different ncol.\n",
+      "Provide balanced files/metadata so each marker has identical sample_id values.\n",
+      paste(details, collapse = "\n")
+    )
+  }
 
   # ===== BUILD EXPERIMENTS =====
   message("Building SummarizedExperiment objects...")
