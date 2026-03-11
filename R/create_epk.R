@@ -16,7 +16,7 @@
 #'
 #' @param stats_summary A data frame containing QC statistics (e.g., from \code{toy_stats_summary}).
 #'   Must include column \code{map_id} in format
-#'   \code{(.*_rep[0-9].genome)} so BigWig files can be checked against
+#'   \code{(.*_(pooled|rep[0-9]+).genome)} so BigWig files can be checked against
 #'   stats rows. Required for explicit mode.
 #'   Ignored if \code{pipeline_output_path} is provided.
 #'
@@ -38,9 +38,11 @@
 #'   of annotations is provided, uses the list names.
 #'
 #' @param sample_metadata Optional data frame with columns \code{marker},
-#'   \code{sample_id}, and \code{replicate}. One row per BigWig file (in same order as
-#'   \code{bw_files}). If provided, overrides automatic marker extraction from filenames.
-#'   Useful for non-standard naming conventions. Default: \code{NULL} (auto-extract).
+#'   \code{sample_id}, and \code{replicate}. Metadata can either be derived from
+#'   \code{bw_files} when filenames follow the expected naming convention, or supplied
+#'   explicitly by the user for non-standard naming. One row per BigWig file is required;
+#'   if a \code{bw_file} column is present it is used for filename-based matching,
+#'   otherwise rows are matched by order. Default: \code{NULL} (auto-extract).
 #'
 #' @return An \code{EPK} object (S3 class) with slots:
 #'   \itemize{
@@ -62,11 +64,13 @@
 #'
 #' \strong{Marker extraction:}
 #' Markers are detected from BigWig file names by looking for common patterns
-#' (H3K4me3, H3K27ac, 5mC, etc.). Replicates are identified and handled.
+#' (H3K4me3, H3K27ac, 5mC, etc.). Replicates are identified and handled. For
+#' non-standard file names, provide \code{sample_metadata} with the expected columns
+#' instead of relying on automatic parsing.
 #'
 #' \strong{Consistency checkpoint:}
 #' If \code{stats_summary} is available, each BigWig file must follow
-#' \code{(.*_rep[0-9].genome.[unscaled|scaled].bw)} and its basename without
+#' \code{(.*_(pooled|rep[0-9]+).genome.[unscaled|scaled].bw)} and its basename without
 #' \code{.scaled/.unscaled.bw} must be present in \code{stats_summary$map_id}.
 #' The function stops with an error if mismatches are found.
 #'
@@ -708,7 +712,10 @@ create_epk <- function(
 #' @keywords internal
 .get_feature_ids <- function(gr) {
   # Try common metadata column names
-  candidates <- c("feature_id", "gene_name", "gene_id", "id", "name")
+  candidates <- c(
+    "feature_id", "cpg_id", "peak_id", "region_id",
+    "gene_name", "gene_id", "id", "name"
+  )
 
   for (col in candidates) {
     if (col %in% names(mcols(gr))) {
