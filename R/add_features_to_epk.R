@@ -11,6 +11,9 @@
 #' @param bw_files Character vector of BigWig file paths (explicit mode).
 #' @param stats_summary Optional data frame with QC statistics. If not provided in
 #'   explicit mode and available in \\code{epk$tables$stats_summary}, that table is used.
+#' @param sample_metadata Optional data frame with columns \\code{marker}, \\code{sample_id},
+#'   \\code{replicate}. If not provided, metadata is auto-extracted from BigWig filenames.
+#'   See \\code{create_epk()} for details.
 #' @param genome Character; genome version passed to \\code{create_epk()}.
 #' @param markers_to_exclude Character vector of marker names to skip.
 #' @param experiment_names Optional character vector naming added experiments.
@@ -38,6 +41,7 @@ add_features_to_epk <- function(
   pipeline_output_path = NULL,
   bw_files = NULL,
   stats_summary = NULL,
+  sample_metadata = NULL,
   genome = "hg38",
   markers_to_exclude = c("INPUT"),
   experiment_names = NULL,
@@ -64,6 +68,7 @@ add_features_to_epk <- function(
     bw_files = bw_files,
     annotations = annotations,
     stats_summary = stats_summary,
+    sample_metadata = sample_metadata,
     pipeline_output_path = pipeline_output_path,
     genome = genome,
     markers_to_exclude = markers_to_exclude,
