@@ -12,7 +12,9 @@
 #' @param stats_summary Optional data frame with QC statistics. If not provided in
 #'   explicit mode and available in \\code{epk$tables$stats_summary}, that table is used.
 #' @param sample_metadata Optional data frame with columns \\code{marker}, \\code{sample_id},
-#'   \\code{replicate}. If not provided, metadata is auto-extracted from BigWig filenames.
+#'   and \\code{replicate}. Metadata can be derived from \\code{bw_files} when filenames
+#'   follow the expected convention, or provided explicitly by the user for non-standard
+#'   naming. An optional \\code{bw_file} column can be supplied for filename-based matching.
 #'   See \\code{create_epk()} for details.
 #' @param genome Character; genome version passed to \\code{create_epk()}.
 #' @param markers_to_exclude Character vector of marker names to skip.
@@ -33,6 +35,20 @@
 #'   pipeline_output_path = toy_dir,
 #'   annotations = list(enhancer = "data/enhancer.bed")
 #' )
+#'
+#' # Explicit mode with user-provided metadata for non-standard filenames
+#' metadata <- data.frame(
+#'   marker = c("INPUT", "H3K4me3"),
+#'   sample_id = c("Donor1_S1", "Donor1_S1"),
+#'   replicate = c("pooled", "pooled")
+#' )
+#' # epk <- add_features_to_epk(
+#' #   epk = epk,
+#' #   bw_files = bw_files,
+#' #   stats_summary = stats_summary,
+#' #   sample_metadata = metadata,
+#' #   annotations = list(cpg_islands = "data/cpg_islands.bed")
+#' # )
 #' }
 #' @export
 add_features_to_epk <- function(
