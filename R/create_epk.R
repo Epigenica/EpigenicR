@@ -442,6 +442,24 @@ create_epk <- function(
   # Enrich stats_summary for downstream plotting helpers
   stats_summary <- .enrich_stats_summary_from_bw_metadata(stats_summary, bw_metadata)
 
+  if (!is.null(stats_summary)) {
+    stats_summary <- as.data.frame(stats_summary, stringsAsFactors = FALSE)
+
+    if (all(c("raw_mapped", "raw_demultiplexed") %in% names(stats_summary))) {
+      num <- suppressWarnings(as.numeric(stats_summary$raw_mapped))
+      den <- suppressWarnings(as.numeric(stats_summary$raw_demultiplexed))
+      stats_summary$frac_mapped <- ifelse(
+        is.na(den) | den == 0,
+        NA_real_,
+        num / den
+      )
+    }
+
+    if ("frac_mapq_filtered" %in% names(stats_summary)) {
+      stats_summary$frac_mapq_filtered <- NULL
+    }
+  }
+
   # Determine unique markers to process
   unique_markers <- setdiff(unique(bw_metadata$marker), markers_to_exclude)
   unique_markers <- unique_markers[!is.na(unique_markers) & unique_markers != ""]
