@@ -55,7 +55,7 @@ extract_marker_names <- function(id, markers){
 #'   plotly output is not handled by this function.
 #'
 #' @param save_dir Character path to directory where plots will be saved.
-#'   Required if \code{save_plots = TRUE}.
+#'   Required only if \code{save_plots = TRUE} and \code{engine = "ggplot"}.
 #'
 #' @param ncol Integer; number of columns used when composing plots per condition.
 #'   Used to determine which panels are on the bottom row (to show x-axis labels
@@ -177,6 +177,7 @@ plot_qc_stats <- function(
   legend_position <- match.arg(legend_position)
   sample_labeling <- match.arg(sample_labeling)
   show_legend <- legend_position != "none"
+  should_save_plots <- isTRUE(save_plots) && engine == "ggplot"
 
 
   if (save_plots && engine == "plotly") {
@@ -185,7 +186,7 @@ plot_qc_stats <- function(
 
   out <- list()
 
-  if (save_plots && save_dir == "") {
+  if (should_save_plots && save_dir == "") {
     stop("Please provide a directory to save the plots.")
   }
 
@@ -261,7 +262,7 @@ plot_qc_stats <- function(
 
       out[[cond]] <- composed
 
-      if (save_plots) {
+      if (should_save_plots) {
         ggplot2::ggsave(
           filename = file.path(save_dir, paste0("QC_", cond, ".png")),
           plot = composed, width = 12, height = 7

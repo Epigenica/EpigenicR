@@ -48,7 +48,7 @@ each composed condition-level figure as a PNG file. Saving interactive
 plotly output is not handled by this function.}
 
 \item{save_dir}{Character path to directory where plots will be saved.
-Required if \code{save_plots = TRUE}.}
+Required only if \code{save_plots = TRUE} and \code{engine = "ggplot"}.}
 
 \item{ncol}{Integer; number of columns used when composing plots per condition.
 Used to determine which panels are on the bottom row (to show x-axis labels
