@@ -56,8 +56,8 @@ only there) and should match the layout used by \code{patchwork::wrap_plots()}
 or the \code{plotly::subplot()} grid.}
 
 \item{sample_labeling}{Character; column in \code{data} used to color points.
-One of \code{"map_id"}, \code{"sample_id_rep"}, \code{"sample_id"}, or
-\code{"replicate"}. Default: \code{"map_id"}.}
+One of \code{"map_id"}, \code{"sample_id_rep"}, \code{"sample_id"},
+or \code{"replicate"}. Default: \code{"map_id"}.}
 
 \item{engine}{Character; output engine. One of \code{"ggplot"} or \code{"plotly"}.
 \itemize{
@@ -133,7 +133,7 @@ qc_plots <- plot_qc_stats(
 )
 
 # Batch-aware workflow (derive metadata outside plot_qc_stats)
-stats_summary <- stats_summary %>%
+stats_summary <- stats_summary \%>\%
   dplyr::mutate(
     create_metadata_df(map_id_vector = stats_summary$map_id, bw_files = NULL)[,
       c("marker", "batch", "sample_id", "replicate")
@@ -143,7 +143,7 @@ stats_summary <- stats_summary %>%
   )
 
 qc_plots_A1 <- plot_qc_stats(
-  stats_summary %>% dplyr::select(-msr) %>% dplyr::filter(batch == "A1"),
+  stats_summary \%>\% dplyr::select(-msr) \%>\% dplyr::filter(batch == "A1"),
   legend_position = "none",
   save_plots = TRUE,
   save_dir = results_qc,
