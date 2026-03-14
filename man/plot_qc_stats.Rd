@@ -13,7 +13,7 @@ plot_qc_stats(
   save_plots = FALSE,
   save_dir = "",
   ncol = 3,
-  sample_labeling = c("sample_id_rep", "sample_id", "replicate"),
+  sample_labeling = c("map_id", "sample_id_rep", "sample_id", "replicate"),
   engine = c("ggplot", "plotly")
 )
 }
@@ -25,7 +25,7 @@ treated as candidate QC statistics unless \code{stats} is provided.}
 
 \item{condition}{Character vector specifying which conditions to plot.
 \itemize{
-  \item \code{NULL}: plot all available conditions (default)
+  \item \code{NULL}: plot all available conditions as-is (default)
   \item \code{"All"}: collapse all rows into a single condition named \code{"All"}
   \item otherwise: one or more condition names to subset
 }}
@@ -54,6 +54,10 @@ Required if \code{save_plots = TRUE}.}
 Used to determine which panels are on the bottom row (to show x-axis labels
 only there) and should match the layout used by \code{patchwork::wrap_plots()}
 or the \code{plotly::subplot()} grid.}
+
+\item{sample_labeling}{Character; column in \code{data} used to color points.
+One of \code{"map_id"}, \code{"sample_id_rep"}, \code{"sample_id"}, or
+\code{"replicate"}. Default: \code{"map_id"}.}
 
 \item{engine}{Character; output engine. One of \code{"ggplot"} or \code{"plotly"}.
 \itemize{
@@ -89,6 +93,8 @@ Each panel consists of:
 }
 For multi-panel figures, x-axis tick labels are hidden for all panels except
 those in the bottom row (computed from \code{ncol}).
+The \code{condition} argument is primarily a subsetting selector; use
+\code{"All"} only when you explicitly want to collapse across conditions.
 }
 \examples{
 \dontrun{
@@ -110,9 +116,41 @@ fig <- plot_qc_stats(
   condition = "Ctrl",
   engine = "plotly",
   legend_position = "bottom",
+  sample_labeling = "map_id",
   ncol = 3
 )
 fig
+
+# EPK-centered QC plotting
+qc_plots <- plot_qc_stats(
+  epk$tables$stats_summary,
+  legend_position = "none",
+  save_plots = TRUE,
+  save_dir = results_qc,
+  ncol = 3,
+  engine = "plotly",
+  sample_labeling = "map_id"
+)
+
+# Batch-aware workflow (derive metadata outside plot_qc_stats)
+stats_summary <- stats_summary %>%
+  dplyr::mutate(
+    create_metadata_df(map_id_vector = stats_summary$map_id, bw_files = NULL)[,
+      c("marker", "batch", "sample_id", "replicate")
+    ],
+    sample_id_rep = paste0(sample_id, "_", replicate),
+    sample_id_rep_batch = paste0(sample_id_rep, "_", batch)
+  )
+
+qc_plots_A1 <- plot_qc_stats(
+  stats_summary %>% dplyr::select(-msr) %>% dplyr::filter(batch == "A1"),
+  legend_position = "none",
+  save_plots = TRUE,
+  save_dir = results_qc,
+  ncol = 3,
+  engine = "plotly",
+  sample_labeling = "sample_id_rep_batch"
+)
 }
 
 }

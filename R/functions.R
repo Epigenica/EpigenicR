@@ -32,7 +32,7 @@ extract_marker_names <- function(id, markers){
 #'
 #' @param condition Character vector specifying which conditions to plot.
 #'   \itemize{
-#'     \item \code{NULL}: plot all available conditions (default)
+#'     \item \code{NULL}: plot all available conditions as-is (default)
 #'     \item \code{"All"}: collapse all rows into a single condition named \code{"All"}
 #'     \item otherwise: one or more condition names to subset
 #'   }
@@ -62,6 +62,10 @@ extract_marker_names <- function(id, markers){
 #'   only there) and should match the layout used by \code{patchwork::wrap_plots()}
 #'   or the \code{plotly::subplot()} grid.
 #'
+#' @param sample_labeling Character; column in \code{data} used to color points.
+#'   One of \code{"map_id"}, \code{"sample_id_rep"}, \code{"sample_id"},
+#'   or \code{"replicate"}. Default: \code{"map_id"}.
+#'
 #' @param engine Character; output engine. One of \code{"ggplot"} or \code{"plotly"}.
 #'   \itemize{
 #'     \item \code{"ggplot"}: returns a static multi-panel patchwork/ggplot object
@@ -90,6 +94,8 @@ extract_marker_names <- function(id, markers){
 #' }
 #' For multi-panel figures, x-axis tick labels are hidden for all panels except
 #' those in the bottom row (computed from \code{ncol}).
+#' The \code{condition} argument is primarily a subsetting selector; use
+#' \code{"All"} only when you explicitly want to collapse across conditions.
 #'
 #' @examples
 #' \dontrun{
@@ -111,10 +117,41 @@ extract_marker_names <- function(id, markers){
 #'   condition = "Ctrl",
 #'   engine = "plotly",
 #'   legend_position = "bottom",
-#'   sampel_labeling = "sample_id", # or sample_id_rep, replicate dependent on your stats_summary. Check the column names of your stats_summary table and choose the one that best suits your needs.
+#'   sample_labeling = "map_id",
 #'   ncol = 3
 #' )
 #' fig
+#'
+#' # EPK-centered QC plotting
+#' qc_plots <- plot_qc_stats(
+#'   epk$tables$stats_summary,
+#'   legend_position = "none",
+#'   save_plots = TRUE,
+#'   save_dir = results_qc,
+#'   ncol = 3,
+#'   engine = "plotly",
+#'   sample_labeling = "map_id"
+#' )
+#'
+#' # Batch-aware workflow (derive metadata outside plot_qc_stats)
+#' stats_summary <- stats_summary %>%
+#'   dplyr::mutate(
+#'     create_metadata_df(map_id_vector = stats_summary$map_id, bw_files = NULL)[,
+#'       c("marker", "batch", "sample_id", "replicate")
+#'     ],
+#'     sample_id_rep = paste0(sample_id, "_", replicate),
+#'     sample_id_rep_batch = paste0(sample_id_rep, "_", batch)
+#'   )
+#'
+#' qc_plots_A1 <- plot_qc_stats(
+#'   stats_summary %>% dplyr::select(-msr) %>% dplyr::filter(batch == "A1"),
+#'   legend_position = "none",
+#'   save_plots = TRUE,
+#'   save_dir = results_qc,
+#'   ncol = 3,
+#'   engine = "plotly",
+#'   sample_labeling = "sample_id_rep_batch"
+#' )
 #' }
 #'
 #' @importFrom ggplot2 ggplot geom_boxplot geom_point theme_bw labs guides theme
@@ -131,13 +168,14 @@ plot_qc_stats <- function(
     save_plots = FALSE,
     save_dir = "",
     ncol = 3,
-    sample_labeling = c("sample_id_rep", "sample_id", "replicate"),
+    sample_labeling = c("map_id", "sample_id_rep", "sample_id", "replicate"),
     engine = c("ggplot", "plotly")
 ){
 
   # Setup arguments
   engine <- match.arg(engine)
   legend_position <- match.arg(legend_position)
+  sample_labeling <- match.arg(sample_labeling)
   show_legend <- legend_position != "none"
 
 
@@ -153,6 +191,10 @@ plot_qc_stats <- function(
 
   if (is.null(marker_levels)) marker_levels <- unique(data$marker)
   data$marker <- factor(data$marker, levels = marker_levels)
+
+  if (!sample_labeling %in% names(data)) {
+    stop("Column '", sample_labeling, "' was not found in `data`.")
+  }
 
   if (is.null(stats)) {
     stats <- names(dplyr::select(data, where(is.numeric)))
