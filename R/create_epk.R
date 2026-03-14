@@ -16,7 +16,7 @@
 #'
 #' @param stats_summary A data frame containing QC statistics (e.g., from \code{toy_stats_summary}).
 #'   Must include column \code{map_id} in format
-#'   \code{(.*_rep[0-9].genome)} so BigWig files can be checked against
+#'   \code{(.*_(pooled|rep[0-9]+).genome)} so BigWig files can be checked against
 #'   stats rows. Required for explicit mode.
 #'   Ignored if \code{pipeline_output_path} is provided.
 #'
@@ -36,6 +36,21 @@
 #' @param experiment_names Character vector naming the experiments. If a single
 #'   annotation is provided, defaults to \code{"protein_coding"}. If a named list
 #'   of annotations is provided, uses the list names.
+#'
+#' @param sample_metadata Optional data frame with columns \code{marker},
+#'   \code{sample_id}, and \code{replicate}. Metadata can either be derived from
+#'   \code{bw_files} when filenames follow the expected naming convention, or supplied
+#'   explicitly by the user for non-standard naming. One row per BigWig file is required;
+#'   if a \code{bw_file} column is present it is used for filename-based matching,
+#'   otherwise rows are matched by order. Default: \code{NULL} (auto-extract).
+#'
+#' @param bigwig_scale Character; which BigWig scaling to use. One of
+#'   \code{"unscaled"}, \code{"scaled"}, or \code{"both"}. Default:
+#'   \code{"unscaled"}.
+#'
+#' @param replicate_mode Character; which replicate type to include. One of
+#'   \code{"all"}, \code{"pooled"}, or \code{"replicates"}. Default:
+#'   \code{"all"}.
 #'
 #' @return An \code{EPK} object (S3 class) with slots:
 #'   \itemize{
@@ -57,13 +72,19 @@
 #'
 #' \strong{Marker extraction:}
 #' Markers are detected from BigWig file names by looking for common patterns
-#' (H3K4me3, H3K27ac, 5mC, etc.). Replicates are identified and handled.
+#' (H3K4me3, H3K27ac, 5mC, etc.). Replicates are identified and handled. For
+#' non-standard file names, provide \code{sample_metadata} with the expected columns
+#' instead of relying on automatic parsing.
 #'
 #' \strong{Consistency checkpoint:}
 #' If \code{stats_summary} is available, each BigWig file must follow
-#' \code{(.*_rep[0-9].genome.[unscaled|scaled].bw)} and its basename without
+#' \code{(.*_(pooled|rep[0-9]+).genome.[unscaled|scaled].bw)} and its basename without
 #' \code{.scaled/.unscaled.bw} must be present in \code{stats_summary$map_id}.
 #' The function stops with an error if mismatches are found.
+#'
+#' \strong{BigWig filtering:}
+#' Use \code{bigwig_scale} and \code{replicate_mode} to subset discovered/input
+#' BigWig files before validation and signal extraction.
 #'
 #' @examples
 #' \dontrun{
@@ -103,6 +124,19 @@
 #'   ),
 #'   stats_summary = stats_summary
 #' )
+#'
+#' # Example 4: Non-standard naming with explicit sample_metadata
+#' metadata <- data.frame(
+#'   marker = c("INPUT", "INPUT", "H3K4me3", "H3K4me3"),
+#'   sample_id = c("Donor1_S1", "Donor1_S2", "Donor1_S1", "Donor1_S2"),
+#'   replicate = c("pooled", "rep1", "pooled", "rep1")
+#' )
+#' epk <- create_epk(
+#'   bw_files = bw_files,
+#'   annotations = toy_genes,
+#'   stats_summary = stats_summary,
+#'   sample_metadata = metadata
+#' )
 #' }
 #'
 #' @importFrom S4Vectors DataFrame mcols
@@ -116,10 +150,185 @@ create_epk <- function(
   pipeline_output_path = NULL,
   genome = "hg38",
   markers_to_exclude = c("INPUT"),
-  experiment_names = NULL
+  experiment_names = NULL,
+  sample_metadata = NULL,
+  bigwig_scale = c("unscaled", "scaled", "both"),
+  replicate_mode = c("all", "pooled", "replicates")
 ) {
 
+  # ---------- local helpers ----------
+  .prepare_bw_metadata <- function(bw_files, sample_metadata = NULL) {
+    bw_base <- basename(bw_files)
+
+    if (is.null(sample_metadata)) {
+      out <- .extract_marker_metadata(bw_files)
+      out$bw_file <- bw_base
+      out <- out[, c("bw_file", "marker", "sample_id", "replicate"), drop = FALSE]
+      return(out)
+    }
+
+    required_cols <- c("marker", "sample_id", "replicate")
+    if (!all(required_cols %in% names(sample_metadata))) {
+      stop(
+        "'sample_metadata' must have columns: ",
+        paste(required_cols, collapse = ", ")
+      )
+    }
+
+    sm <- as.data.frame(sample_metadata, stringsAsFactors = FALSE)
+    sm$marker <- trimws(as.character(sm$marker))
+    sm$sample_id <- trimws(as.character(sm$sample_id))
+    sm$replicate <- trimws(as.character(sm$replicate))
+
+    if ("bw_file" %in% names(sm)) {
+      sm$bw_file <- basename(trimws(as.character(sm$bw_file)))
+
+      if (anyDuplicated(sm$bw_file)) {
+        dup <- unique(sm$bw_file[duplicated(sm$bw_file)])
+        stop(
+          "'sample_metadata$bw_file' contains duplicates:\n  ",
+          paste(dup, collapse = "\n  ")
+        )
+      }
+
+      missing_meta <- setdiff(bw_base, sm$bw_file)
+      extra_meta <- setdiff(sm$bw_file, bw_base)
+
+      if (length(missing_meta) > 0) {
+        stop(
+          "'sample_metadata$bw_file' is missing entries for:\n  ",
+          paste(missing_meta, collapse = "\n  ")
+        )
+      }
+      if (length(extra_meta) > 0) {
+        stop(
+          "'sample_metadata$bw_file' has entries not present in 'bw_files':\n  ",
+          paste(extra_meta, collapse = "\n  ")
+        )
+      }
+
+      ord <- match(bw_base, sm$bw_file)
+      out <- sm[ord, c("bw_file", "marker", "sample_id", "replicate"), drop = FALSE]
+    } else {
+      if (nrow(sm) != length(bw_files)) {
+        stop(
+          "'sample_metadata' must have one row per BigWig file when 'bw_file' is absent. ",
+          "Expected ", length(bw_files), " rows, got ", nrow(sm), "."
+        )
+      }
+      out <- data.frame(
+        bw_file = bw_base,
+        marker = sm$marker,
+        sample_id = sm$sample_id,
+        replicate = sm$replicate,
+        stringsAsFactors = FALSE
+      )
+    }
+
+    for (col in c("marker", "sample_id", "replicate")) {
+      bad <- is.na(out[[col]]) | out[[col]] == ""
+      if (any(bad)) {
+        stop("Invalid 'sample_metadata': column '", col, "' contains NA/empty values.")
+      }
+    }
+
+    out
+  }
+
+  .enrich_stats_summary_from_bw_metadata <- function(stats_summary, bw_metadata) {
+    if (is.null(stats_summary) || !"map_id" %in% names(stats_summary)) {
+      return(stats_summary)
+    }
+
+    bw_map_id <- sub("\\.(unscaled|scaled)\\.bw$", "", bw_metadata$bw_file)
+
+    md <- data.frame(
+      map_id = bw_map_id,
+      marker = bw_metadata$marker,
+      sample_id = bw_metadata$sample_id,
+      replicate = bw_metadata$replicate,
+      stringsAsFactors = FALSE
+    )
+
+    if (anyDuplicated(md$map_id)) {
+      md <- md[!duplicated(md$map_id), , drop = FALSE]
+      warning("Duplicate map_id values detected in bw metadata (e.g., scaled/unscaled pairs). Using first occurrence per map_id.")
+    }
+
+    ord <- match(stats_summary$map_id, md$map_id)
+
+    if (!"marker" %in% names(stats_summary)) {
+      stats_summary$marker <- md$marker[ord]
+    }
+    if (!"sample_id" %in% names(stats_summary)) {
+      stats_summary$sample_id <- md$sample_id[ord]
+    }
+    if (!"replicate" %in% names(stats_summary)) {
+      stats_summary$replicate <- md$replicate[ord]
+    }
+    if (!"sample_id_rep" %in% names(stats_summary)) {
+      stats_summary$sample_id_rep <- ifelse(
+        is.na(stats_summary$sample_id) | is.na(stats_summary$replicate),
+        NA_character_,
+        paste(stats_summary$sample_id, stats_summary$replicate, sep = "_")
+      )
+    }
+
+    stats_summary
+  }
+
+  .filter_bw_files <- function(bw_files, bigwig_scale, replicate_mode) {
+    bw_base <- basename(bw_files)
+
+    scale <- tolower(sub(".*\\.(scaled|unscaled)\\.bw$", "\\1", bw_base))
+    scale[!grepl("\\.(scaled|unscaled)\\.bw$", bw_base, ignore.case = TRUE)] <- NA_character_
+
+    rep_token <- tolower(sub(
+      ".*_(pooled|rep[0-9]+)\\.[^.]+\\.(scaled|unscaled)\\.bw$",
+      "\\1",
+      bw_base,
+      perl = TRUE
+    ))
+    rep_token[!grepl(
+      "_(pooled|rep[0-9]+)\\.[^.]+\\.(scaled|unscaled)\\.bw$",
+      bw_base,
+      perl = TRUE,
+      ignore.case = TRUE
+    )] <- NA_character_
+
+    keep <- rep(TRUE, length(bw_files))
+
+    if (bigwig_scale != "both") {
+      keep <- keep & !is.na(scale) & scale == bigwig_scale
+    }
+
+    if (replicate_mode == "pooled") {
+      keep <- keep & !is.na(rep_token) & rep_token == "pooled"
+    } else if (replicate_mode == "replicates") {
+      keep <- keep & !is.na(rep_token) & grepl("^rep[0-9]+$", rep_token)
+    }
+
+    filtered <- bw_files[keep]
+    message(
+      "Selected ", length(filtered), " of ", length(bw_files),
+      " BigWig files after filtering (bigwig_scale='", bigwig_scale,
+      "', replicate_mode='", replicate_mode, "')."
+    )
+
+    if (length(filtered) == 0) {
+      stop(
+        "No BigWig files remain after filtering. Adjust 'bigwig_scale' and/or ",
+        "'replicate_mode'."
+      )
+    }
+
+    filtered
+  }
+
   # ===== INPUT VALIDATION =====
+
+  bigwig_scale <- match.arg(bigwig_scale)
+  replicate_mode <- match.arg(replicate_mode)
   
   # Check that annotations is provided
   if (is.null(annotations)) {
@@ -144,7 +353,7 @@ create_epk <- function(
     if (length(bw_files) == 0) {
       stop("No BigWig files found in pipeline output path: ", pipeline_output_path)
     }
-    message("Found ", length(bw_files), " BigWig files.")
+    message("Found ", length(bw_files), " BigWig files before filtering.")
 
     # Discover stats_summary
     stats_summary <- .discover_stats_summary(pipeline_output_path)
@@ -153,8 +362,6 @@ create_epk <- function(
         "No stats_summary found in pipeline output path. ",
         "Proceeding with minimal metadata; enrichment functions may be limited."
       )
-    } else {
-      .validate_bw_files_in_stats_summary(bw_files = bw_files, stats_summary = stats_summary)
     }
   } else {
     # ===== MODE 2: EXPLICIT INPUT =====
@@ -177,9 +384,18 @@ create_epk <- function(
         "No 'stats_summary' provided. Proceeding with minimal metadata; ",
         "enrichment functions may be limited."
       )
-    } else {
-      .validate_bw_files_in_stats_summary(bw_files = bw_files, stats_summary = stats_summary)
     }
+  }
+
+  # Filter input files by scaling and replicate mode before validation.
+  bw_files <- .filter_bw_files(
+    bw_files = bw_files,
+    bigwig_scale = bigwig_scale,
+    replicate_mode = replicate_mode
+  )
+
+  if (!is.null(stats_summary)) {
+    .validate_bw_files_in_stats_summary(bw_files = bw_files, stats_summary = stats_summary)
   }
 
   # ===== NORMALIZE ANNOTATIONS =====
@@ -217,14 +433,61 @@ create_epk <- function(
 
   # ===== EXTRACT MARKER NAMES FROM BIGWIG FILES =====
   message("Extracting marker information from BigWig filenames...")
-  bw_metadata <- .extract_marker_metadata(bw_files)
+  bw_metadata <- .prepare_bw_metadata(bw_files = bw_files, sample_metadata = sample_metadata)
+
+  if (!is.null(sample_metadata)) {
+    message("Using user-provided sample metadata.")
+  }
+
+  # Enrich stats_summary for downstream plotting helpers
+  stats_summary <- .enrich_stats_summary_from_bw_metadata(stats_summary, bw_metadata)
+
+  if (!is.null(stats_summary)) {
+    stats_summary <- as.data.frame(stats_summary, stringsAsFactors = FALSE)
+
+    if (all(c("raw_mapped", "raw_demultiplexed") %in% names(stats_summary))) {
+      num <- suppressWarnings(as.numeric(stats_summary$raw_mapped))
+      den <- suppressWarnings(as.numeric(stats_summary$raw_demultiplexed))
+      stats_summary$frac_mapped <- ifelse(
+        is.na(den) | den == 0,
+        NA_real_,
+        num / den
+      )
+    }
+
+    if ("frac_mapq_filtered" %in% names(stats_summary)) {
+      stats_summary$frac_mapq_filtered <- NULL
+    }
+  }
 
   # Determine unique markers to process
   unique_markers <- setdiff(unique(bw_metadata$marker), markers_to_exclude)
+  unique_markers <- unique_markers[!is.na(unique_markers) & unique_markers != ""]
   if (length(unique_markers) == 0) {
-    stop("No markers to process after exclusions. Check 'markers_to_exclude'.")
+    stop("No markers to process after exclusions. Check 'markers_to_exclude' and metadata.")
   }
   message("Processing markers: ", paste(unique_markers, collapse = ", "))
+
+  # Enforce same sample set across markers for valid SummarizedExperiment assays
+  marker_samples <- lapply(unique_markers, function(m) {
+    idx <- !is.na(bw_metadata$marker) & bw_metadata$marker == m
+    sort(unique(stats::na.omit(bw_metadata$sample_id[idx])))
+  })
+  names(marker_samples) <- unique_markers
+  ref <- marker_samples[[1]]
+  same_set <- vapply(marker_samples, function(x) identical(x, ref), logical(1))
+  if (!all(same_set)) {
+    details <- vapply(
+      names(marker_samples),
+      function(m) paste0(m, " [n=", length(marker_samples[[m]]), "]: ", paste(marker_samples[[m]], collapse = ", ")),
+      character(1)
+    )
+    stop(
+      "Markers do not share the same sample set, so assays would have different ncol.\n",
+      "Provide balanced files/metadata so each marker has identical sample_id values.\n",
+      paste(details, collapse = "\n")
+    )
+  }
 
   # ===== BUILD EXPERIMENTS =====
   message("Building SummarizedExperiment objects...")
@@ -239,13 +502,19 @@ create_epk <- function(
 
     for (marker in unique_markers) {
       message("    Marker: ", marker)
-      marker_bw_files <- bw_files[bw_metadata$marker == marker]
+      marker_idx <- !is.na(bw_metadata$marker) & bw_metadata$marker == marker
+      marker_bw_files <- bw_files[marker_idx]
+      marker_labels <- bw_metadata$sample_id[marker_idx]
+
+      if (length(marker_bw_files) == 0) {
+        stop("No BigWig files available for marker '", marker, "' after filtering.")
+      }
 
       # Use wigglescout to extract signal at regions
       bw_gr <- .extract_bw_signal(
         bwfiles = marker_bw_files,
         loci = annotation_gr,
-        labels = bw_metadata$sample_id[bw_metadata$marker == marker]
+        labels = marker_labels
       )
 
       # Convert to matrix
@@ -373,23 +642,23 @@ create_epk <- function(
   }
 
   bw_base <- basename(bw_files)
-  bw_pattern <- "_rep[0-9]+\\.[^.]+\\.(unscaled|scaled)\\.bw$"
+  bw_pattern <- "_(pooled|rep[0-9]+)\\.[^.]+\\.(unscaled|scaled)\\.bw$"
   invalid_bw <- bw_base[!grepl(bw_pattern, bw_base)]
   if (length(invalid_bw) > 0) {
     stop(
       "Invalid BigWig filename format. Expected pattern: ",
-      "(.*_rep[0-9].genome.[unscaled|scaled].bw)\n",
+      "(.*_(pooled|rep[0-9]+).genome.(unscaled|scaled).bw)\n",
       "Invalid file(s):\n  ",
       paste(invalid_bw, collapse = "\n  ")
     )
   }
 
-  map_id_pattern <- "_rep[0-9]+\\.[^.]+$"
+  map_id_pattern <- "_(pooled|rep[0-9]+)\\.[^.]+$"
   invalid_map_id <- stats_summary$map_id[!grepl(map_id_pattern, stats_summary$map_id)]
   if (length(invalid_map_id) > 0) {
     stop(
       "Invalid map_id format in stats_summary. Expected pattern: ",
-      "(.*_rep[0-9].genome)\n",
+      "(.*_(pooled|rep[0-9]+).genome)\n",
       "Invalid map_id value(s):\n  ",
       paste(unique(invalid_map_id), collapse = "\n  ")
     )
@@ -504,6 +773,11 @@ create_epk <- function(
       }
     }
 
+    # Fallback: infer marker as the third underscore-delimited token.
+    if (is.na(metadata$marker[i]) && grepl("^[^_]+_[^_]+_[^_]+_", filename)) {
+      metadata$marker[i] <- sub("^[^_]+_[^_]+_([^_]+)_.*$", "\\1", filename)
+    }
+
     # Extract sample_id (simple heuristic: look for SAMPLE-XXXX pattern)
     sample_match <- regmatches(
       filename,
@@ -542,7 +816,10 @@ create_epk <- function(
 #' @keywords internal
 .get_feature_ids <- function(gr) {
   # Try common metadata column names
-  candidates <- c("feature_id", "gene_name", "gene_id", "id", "name")
+  candidates <- c(
+    "feature_id", "cpg_id", "peak_id", "region_id",
+    "gene_name", "gene_id", "id", "name"
+  )
 
   for (col in candidates) {
     if (col %in% names(mcols(gr))) {

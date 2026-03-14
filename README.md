@@ -105,6 +105,28 @@ epk <- create_epk(
 )
 ```
 
+If your BigWig filenames follow the expected naming convention, sample metadata is derived
+automatically from `bw_files`. For non-standard names, provide `sample_metadata` explicitly
+with columns `marker`, `sample_id`, and `replicate` (optionally `bw_file` for filename-based
+matching).
+
+```r
+sample_metadata <- data.frame(
+  bw_file = basename(bw_files),
+  marker = c("M2", "M2", "M3", "M3"),
+  sample_id = c("Donor1_S1", "Donor1_S2", "Donor1_S1", "Donor1_S2"),
+  replicate = c("pooled", "pooled", "pooled", "pooled"),
+  stringsAsFactors = FALSE
+)
+
+epk <- create_epk(
+  bw_files = bw_files,
+  annotations = toy_genes,
+  stats_summary = stats_summary,
+  sample_metadata = sample_metadata
+)
+```
+
 See [inst/scripts/CREATE_EPK_USAGE.md](inst/scripts/CREATE_EPK_USAGE.md) for comprehensive examples.
 
 ### 1. Extract Metadata from BigWig Files
@@ -296,6 +318,20 @@ epk_loaded <- add_features_to_epk(
 # )
 
 names(MultiAssayExperiment::experiments(epk_loaded$mse))
+```
+
+`add_features_to_epk()` follows the same metadata rules as `create_epk()`: if metadata can be
+parsed from `bw_files`, it is derived automatically; otherwise provide `sample_metadata` with the
+expected columns and the feature addition will work in explicit mode.
+
+```r
+epk_loaded <- add_features_to_epk(
+  epk = epk_loaded,
+  bw_files = bw_files,
+  stats_summary = stats_summary,
+  sample_metadata = sample_metadata,
+  annotations = list(cpg_islands = "data/cpg_islands.bed")
+)
 ```
 
 ### 5. Compute Sample Correlations
