@@ -84,6 +84,27 @@ epk <- create_epk(
 print(epk)
 ```
 
+For users running from a cloned repository, this also works directly when your
+working directory is the repository root:
+
+```r
+data(toy_genes)
+
+# This path is valid in a cloned repo (run from the repo root)
+epk <- create_epk(
+  pipeline_output_path = "inst/extdata/toy_dataset/minute_output",
+  annotations = toy_genes,
+  experiment_names = "SvCn05",
+  bigwig_scale = "unscaled",
+  replicate_mode = "pooled",
+  markers_to_exclude = c("Input")
+)
+```
+
+If you installed the package (instead of running from a clone), use
+`system.file("extdata", "toy_dataset", package = "EpigenicR")` to resolve the
+data path portably.
+
 Or with explicit files:
 
 ```r
