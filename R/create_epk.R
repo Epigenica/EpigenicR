@@ -52,6 +52,11 @@
 #'   \code{"all"}, \code{"pooled"}, or \code{"replicates"}. Default:
 #'   \code{"all"}.
 #'
+#' @param scaling_info_file Optional path to a scaling info file (for example,
+#'   \code{scalinginfo.txt}) containing at least \code{map_id} and \code{msr}
+#'   columns. If provided, this file is used in preference to auto-discovery
+#'   from \code{pipeline_output_path}. Default: \code{NULL}.
+#'
 #' @return An \code{EPK} object (S3 class) with slots:
 #'   \itemize{
 #'     \item \code{mse}: \code{MultiAssayExperiment} with one \code{SummarizedExperiment} per experiment
@@ -90,7 +95,8 @@
 #' When \code{pipeline_output_path} is provided, \code{create_epk()} attempts to
 #' read \code{scalinginfo.txt} (or \code{scaling_info.txt}) from common
 #' \code{reports/} locations and append \code{msr} to
-#' \code{epk$tables$stats_summary} by \code{map_id} when available.
+#' \code{epk$tables$stats_summary} by \code{map_id} when available. If
+#' \code{scaling_info_file} is provided, that file is used instead.
 #'
 #' @examples
 #' \dontrun{
@@ -159,7 +165,8 @@ create_epk <- function(
   experiment_names = NULL,
   sample_metadata = NULL,
   bigwig_scale = c("unscaled", "scaled", "both"),
-  replicate_mode = c("all", "pooled", "replicates")
+  replicate_mode = c("all", "pooled", "replicates"),
+  scaling_info_file = NULL
 ) {
 
   # ---------- local helpers ----------
@@ -467,7 +474,8 @@ create_epk <- function(
 
     stats_summary <- .attach_msr_from_scaling_info(
       stats_summary = stats_summary,
-      pipeline_output_path = pipeline_output_path
+      pipeline_output_path = pipeline_output_path,
+      scaling_info_file = scaling_info_file
     )
   }
 
@@ -647,21 +655,37 @@ create_epk <- function(
 
 #' Discover and attach msr from scalinginfo file
 #' @keywords internal
-.attach_msr_from_scaling_info <- function(stats_summary, pipeline_output_path) {
-  if (is.null(stats_summary) || is.null(pipeline_output_path)) {
+.attach_msr_from_scaling_info <- function(stats_summary, pipeline_output_path, scaling_info_file = NULL) {
+  if (is.null(stats_summary)) {
     return(stats_summary)
   }
 
-  candidates <- c(
-    file.path(pipeline_output_path, "minute_output", "reports", "scalinginfo.txt"),
-    file.path(pipeline_output_path, "reports", "scalinginfo.txt"),
-    file.path(pipeline_output_path, "minute_output", "reports", "scaling_info.txt"),
-    file.path(pipeline_output_path, "reports", "scaling_info.txt")
-  )
+  if (!is.null(scaling_info_file)) {
+    if (!is.character(scaling_info_file) || length(scaling_info_file) != 1) {
+      stop("'scaling_info_file' must be a single file path string.")
+    }
+    if (!file.exists(scaling_info_file)) {
+      message("No scaling info file found at '", scaling_info_file, "'. Continuing without msr.")
+      return(stats_summary)
+    }
+    scaling_file <- scaling_info_file
+  } else {
+    if (is.null(pipeline_output_path)) {
+      return(stats_summary)
+    }
 
-  scaling_file <- candidates[file.exists(candidates)][1]
-  if (is.na(scaling_file) || length(scaling_file) == 0) {
-    return(stats_summary)
+    candidates <- c(
+      file.path(pipeline_output_path, "minute_output", "reports", "scalinginfo.txt"),
+      file.path(pipeline_output_path, "reports", "scalinginfo.txt"),
+      file.path(pipeline_output_path, "minute_output", "reports", "scaling_info.txt"),
+      file.path(pipeline_output_path, "reports", "scaling_info.txt")
+    )
+
+    scaling_file <- candidates[file.exists(candidates)][1]
+    if (is.na(scaling_file) || length(scaling_file) == 0) {
+      message("No scaling info file found in pipeline reports directories. Continuing without msr.")
+      return(stats_summary)
+    }
   }
 
   scaling_info <- tryCatch(

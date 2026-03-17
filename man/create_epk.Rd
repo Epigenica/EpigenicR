@@ -14,7 +14,8 @@ create_epk(
   experiment_names = NULL,
   sample_metadata = NULL,
   bigwig_scale = c("unscaled", "scaled", "both"),
-  replicate_mode = c("all", "pooled", "replicates")
+  replicate_mode = c("all", "pooled", "replicates"),
+  scaling_info_file = NULL
 )
 }
 \arguments{
@@ -63,6 +64,11 @@ otherwise rows are matched by order. Default: \code{NULL} (auto-extract).}
 \item{replicate_mode}{Character; which replicate type to include. One of
 \code{"all"}, \code{"pooled"}, or \code{"replicates"}. Default:
 \code{"all"}.}
+
+\item{scaling_info_file}{Optional path to a scaling info file (for example,
+\code{scalinginfo.txt}) containing at least \code{map_id} and \code{msr}
+columns. If provided, this file is used in preference to auto-discovery
+from \code{pipeline_output_path}. Default: \code{NULL}.}
 }
 \value{
 An \code{EPK} object (S3 class) with slots:
@@ -110,7 +116,8 @@ BigWig files before validation and signal extraction.
 When \code{pipeline_output_path} is provided, \code{create_epk()} attempts to
 read \code{scalinginfo.txt} (or \code{scaling_info.txt}) from common
 \code{reports/} locations and append \code{msr} to
-\code{epk$tables$stats_summary} by \code{map_id} when available.
+\code{epk$tables$stats_summary} by \code{map_id} when available. If
+\code{scaling_info_file} is provided, that file is used instead.
 }
 \examples{
 \dontrun{

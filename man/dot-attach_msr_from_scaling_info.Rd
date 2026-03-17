@@ -4,7 +4,11 @@
 \alias{.attach_msr_from_scaling_info}
 \title{Discover and attach msr from scalinginfo file}
 \usage{
-.attach_msr_from_scaling_info(stats_summary, pipeline_output_path)
+.attach_msr_from_scaling_info(
+  stats_summary,
+  pipeline_output_path,
+  scaling_info_file = NULL
+)
 }
 \description{
 Discover and attach msr from scalinginfo file
