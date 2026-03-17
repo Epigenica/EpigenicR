@@ -86,6 +86,12 @@
 #' Use \code{bigwig_scale} and \code{replicate_mode} to subset discovered/input
 #' BigWig files before validation and signal extraction.
 #'
+#' \strong{Scaling info integration (path mode):}
+#' When \code{pipeline_output_path} is provided, \code{create_epk()} attempts to
+#' read \code{scalinginfo.txt} (or \code{scaling_info.txt}) from common
+#' \code{reports/} locations and append \code{msr} to
+#' \code{epk$tables$stats_summary} by \code{map_id} when available.
+#'
 #' @examples
 #' \dontrun{
 #' # Example 1: Explicit mode with GRanges annotation
@@ -458,6 +464,11 @@ create_epk <- function(
     if ("frac_mapq_filtered" %in% names(stats_summary)) {
       stats_summary$frac_mapq_filtered <- NULL
     }
+
+    stats_summary <- .attach_msr_from_scaling_info(
+      stats_summary = stats_summary,
+      pipeline_output_path = pipeline_output_path
+    )
   }
 
   # Determine unique markers to process
@@ -632,6 +643,58 @@ create_epk <- function(
   }
 
   return(NULL)
+}
+
+#' Discover and attach msr from scalinginfo file
+#' @keywords internal
+.attach_msr_from_scaling_info <- function(stats_summary, pipeline_output_path) {
+  if (is.null(stats_summary) || is.null(pipeline_output_path)) {
+    return(stats_summary)
+  }
+
+  candidates <- c(
+    file.path(pipeline_output_path, "minute_output", "reports", "scalinginfo.txt"),
+    file.path(pipeline_output_path, "reports", "scalinginfo.txt"),
+    file.path(pipeline_output_path, "minute_output", "reports", "scaling_info.txt"),
+    file.path(pipeline_output_path, "reports", "scaling_info.txt")
+  )
+
+  scaling_file <- candidates[file.exists(candidates)][1]
+  if (is.na(scaling_file) || length(scaling_file) == 0) {
+    return(stats_summary)
+  }
+
+  scaling_info <- tryCatch(
+    utils::read.csv(
+      scaling_file,
+      sep = "\t",
+      header = TRUE,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    ),
+    error = function(e) {
+      warning("Could not read scaling info file: ", scaling_file, " (", conditionMessage(e), ").")
+      return(NULL)
+    }
+  )
+
+  if (is.null(scaling_info)) {
+    return(stats_summary)
+  }
+
+  if (!"map_id" %in% names(scaling_info) && ncol(scaling_info) >= 1) {
+    names(scaling_info)[1] <- "map_id"
+  }
+
+  if (!all(c("map_id", "msr") %in% names(scaling_info))) {
+    warning("Scaling info found but missing required columns 'map_id' and/or 'msr': ", scaling_file)
+    return(stats_summary)
+  }
+
+  ord <- match(stats_summary$map_id, scaling_info$map_id)
+  stats_summary$msr <- scaling_info$msr[ord]
+
+  stats_summary
 }
 
 #' Validate that BigWig files match stats_summary$map_id

@@ -105,6 +105,12 @@ The function stops with an error if mismatches are found.
 \strong{BigWig filtering:}
 Use \code{bigwig_scale} and \code{replicate_mode} to subset discovered/input
 BigWig files before validation and signal extraction.
+
+\strong{Scaling info integration (path mode):}
+When \code{pipeline_output_path} is provided, \code{create_epk()} attempts to
+read \code{scalinginfo.txt} (or \code{scaling_info.txt}) from common
+\code{reports/} locations and append \code{msr} to
+\code{epk$tables$stats_summary} by \code{map_id} when available.
 }
 \examples{
 \dontrun{
