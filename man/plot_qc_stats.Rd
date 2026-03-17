@@ -5,9 +5,12 @@
 \title{Plot QC statistics across markers, conditions, and replicates}
 \usage{
 plot_qc_stats(
-  data,
+  data = NULL,
+  epk = NULL,
+  stats_summary = NULL,
   condition = NULL,
   stats = NULL,
+  stats_exclude = NULL,
   marker_levels = NULL,
   legend_position = c("bottom", "right", "left", "top", "none"),
   save_plots = FALSE,
@@ -18,10 +21,18 @@ plot_qc_stats(
 )
 }
 \arguments{
-\item{data}{A data frame containing QC statistics. Must include a \code{marker}
-column and (for full functionality) \code{replicate}. If \code{condition} is
-missing, all rows are treated as a single condition. All numeric columns are
-treated as candidate QC statistics unless \code{stats} is provided.}
+\item{data}{Backward-compatible alias for \code{stats_summary}. A data frame
+containing QC statistics.}
+
+\item{epk}{Optional EPK object. If supplied,\code{epk$tables$stats_summary}
+is used as plotting input.}
+
+\item{stats_summary}{Optional data frame containing QC statistics. If
+provided, it takes precedence over \code{epk} and \code{data}.
+Must include a \code{marker} column and (for full functionality)
+\code{replicate}. If \code{condition} is missing, all rows are treated
+as a single condition. All numeric columns are treated as candidate QC
+statistics unless \code{stats} is provided.}
 
 \item{condition}{Character vector specifying which conditions to plot.
 \itemize{
@@ -32,6 +43,10 @@ treated as candidate QC statistics unless \code{stats} is provided.}
 
 \item{stats}{Character vector of numeric column names to plot. If \code{NULL}
 (default), all numeric columns in \code{data} are used.}
+
+\item{stats_exclude}{Optional character vector of numeric column names to
+exclude from plotting. Applied after \code{stats} selection. Useful when
+\code{stats = NULL} but a few numeric columns should be omitted.}
 
 \item{marker_levels}{Optional character vector defining the order of markers
 on the x-axis. If \code{NULL} (default), uses the order found in
@@ -123,13 +138,20 @@ fig
 
 # EPK-centered QC plotting
 qc_plots <- plot_qc_stats(
-  epk$tables$stats_summary,
+  epk = epk,
   legend_position = "none",
   save_plots = TRUE,
   save_dir = results_qc,
   ncol = 3,
   engine = "plotly",
   sample_labeling = "map_id"
+)
+
+# Direct stats_summary input
+qc_plots_tbl <- plot_qc_stats(
+  stats_summary = qc_df,
+  engine = "ggplot",
+  ncol = 3
 )
 
 # Batch-aware workflow (derive metadata outside plot_qc_stats)

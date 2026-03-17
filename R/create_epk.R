@@ -177,6 +177,34 @@ create_epk <- function(
       out <- .extract_marker_metadata(bw_files)
       out$bw_file <- bw_base
       out <- out[, c("bw_file", "marker", "sample_id", "replicate"), drop = FALSE]
+
+      bad <- is.na(out$marker) | out$marker == "" |
+        is.na(out$sample_id) | out$sample_id == "" |
+        is.na(out$replicate) | out$replicate == ""
+
+      if (any(bad)) {
+        bad_files <- out$bw_file[bad]
+        template <- data.frame(
+          bw_file = head(bw_base, min(6, length(bw_base))),
+          marker = "<marker>",
+          sample_id = "<sample_id>",
+          replicate = "<replicate: rep1/rep2/pooled>",
+          stringsAsFactors = FALSE
+        )
+
+        message("Could not reliably parse marker/sample_id/replicate from some BigWig filenames.")
+        message("Examples of problematic files:")
+        message("  ", paste(head(bad_files, 10), collapse = "\n  "))
+        message("Please provide 'sample_metadata' with columns: marker, sample_id, replicate (optional: bw_file).")
+        message("Example template:")
+        print(template)
+
+        stop(
+          "Automatic metadata extraction failed for one or more BigWig files. ",
+          "Provide 'sample_metadata' explicitly."
+        )
+      }
+
       return(out)
     }
 
@@ -851,6 +879,23 @@ create_epk <- function(
 
   for (i in seq_along(bw_files)) {
     filename <- basename(bw_files[i])
+
+    # Primary parser for minute-style naming:
+    # <project>_<batch>_<marker>_<rerun>_<sample_id>_<replicate>.<genome>.<scaled|unscaled>.bw
+    m <- regexec(
+      "^([^_]+)_([^_]+)_([^_]+)_([^_]+)_(.+)_(pooled|rep[0-9]+)\\.[^.]+\\.(scaled|unscaled)\\.bw$",
+      filename,
+      ignore.case = TRUE,
+      perl = TRUE
+    )
+    g <- regmatches(filename, m)[[1]]
+
+    if (length(g) > 0) {
+      metadata$marker[i] <- g[4]
+      metadata$sample_id[i] <- g[6]
+      metadata$replicate[i] <- tolower(g[7])
+      next
+    }
 
     # Extract marker
     for (marker in known_markers) {

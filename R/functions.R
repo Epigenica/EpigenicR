@@ -19,16 +19,68 @@ extract_marker_names <- function(id, markers){
   return(extrc_markers)
 }
 
+#' Resolve QC input to a stats_summary-like data frame
+#' @keywords internal
+.resolve_stats_summary_input <- function(data = NULL, epk = NULL, stats_summary = NULL, fn_name = "plot_qc_stats") {
+  provided <- c(
+    data = !is.null(data),
+    epk = !is.null(epk),
+    stats_summary = !is.null(stats_summary)
+  )
+
+  if (!any(provided)) {
+    stop("Provide one of 'stats_summary', 'epk', or 'data' to ", fn_name, "().")
+  }
+
+  if (sum(provided) > 1) {
+    warning(
+      "Multiple input sources provided (",
+      paste(names(provided)[provided], collapse = ", "),
+      "). Using priority: stats_summary > data > epk."
+    )
+  }
+
+  if (!is.null(stats_summary)) {
+    data_in <- stats_summary
+  } else if (!is.null(data)) {
+    data_in <- data
+  } else {
+    if (!is.list(epk) || is.null(epk$tables) || is.null(epk$tables$stats_summary)) {
+      stop("'epk' must contain epk$tables$stats_summary.")
+    }
+    data_in <- epk$tables$stats_summary
+  }
+
+  if (!is.data.frame(data_in)) {
+    data_in <- tryCatch(
+      as.data.frame(data_in, stringsAsFactors = FALSE),
+      error = function(e) {
+        stop("Resolved stats summary input is not a data frame and cannot be coerced.")
+      }
+    )
+  }
+
+  data_in
+}
+
 #' Plot QC statistics across markers, conditions, and replicates
 #'
 #' Generates boxplots with overlaid jittered points for QC metrics across markers
 #' and experimental conditions. Can return either a static multi-panel figure
 #' composed with \pkg{patchwork} or an interactive \pkg{plotly} subplot grid.
 #'
-#' @param data A data frame containing QC statistics. Must include a \code{marker}
-#'   column and (for full functionality) \code{replicate}. If \code{condition} is
-#'   missing, all rows are treated as a single condition. All numeric columns are
-#'   treated as candidate QC statistics unless \code{stats} is provided.
+#' @param data Backward-compatible alias for \code{stats_summary}. A data frame
+#'   containing QC statistics.
+#'
+#' @param epk Optional EPK object. If supplied,\code{epk$tables$stats_summary}
+#'   is used as plotting input.
+#'
+#' @param stats_summary Optional data frame containing QC statistics. If
+#'   provided, it takes precedence over \code{epk} and \code{data}.
+#'   Must include a \code{marker} column and (for full functionality)
+#'   \code{replicate}. If \code{condition} is missing, all rows are treated
+#'   as a single condition. All numeric columns are treated as candidate QC
+#'   statistics unless \code{stats} is provided.
 #'
 #' @param condition Character vector specifying which conditions to plot.
 #'   \itemize{
@@ -39,6 +91,10 @@ extract_marker_names <- function(id, markers){
 #'
 #' @param stats Character vector of numeric column names to plot. If \code{NULL}
 #'   (default), all numeric columns in \code{data} are used.
+#'
+#' @param stats_exclude Optional character vector of numeric column names to
+#'   exclude from plotting. Applied after \code{stats} selection. Useful when
+#'   \code{stats = NULL} but a few numeric columns should be omitted.
 #'
 #' @param marker_levels Optional character vector defining the order of markers
 #'   on the x-axis. If \code{NULL} (default), uses the order found in
@@ -124,13 +180,20 @@ extract_marker_names <- function(id, markers){
 #'
 #' # EPK-centered QC plotting
 #' qc_plots <- plot_qc_stats(
-#'   epk$tables$stats_summary,
+#'   epk = epk,
 #'   legend_position = "none",
 #'   save_plots = TRUE,
 #'   save_dir = results_qc,
 #'   ncol = 3,
 #'   engine = "plotly",
 #'   sample_labeling = "map_id"
+#' )
+#'
+#' # Direct stats_summary input
+#' qc_plots_tbl <- plot_qc_stats(
+#'   stats_summary = qc_df,
+#'   engine = "ggplot",
+#'   ncol = 3
 #' )
 #'
 #' # Batch-aware workflow (derive metadata outside plot_qc_stats)
@@ -160,9 +223,12 @@ extract_marker_names <- function(id, markers){
 #' @importFrom tidyselect where
 #' @export
 plot_qc_stats <- function(
-    data,
+  data = NULL,
+  epk = NULL,
+  stats_summary = NULL,
     condition = NULL,
     stats = NULL,
+    stats_exclude = NULL,
     marker_levels = NULL,
     legend_position = c("bottom","right","left","top","none"),
     save_plots = FALSE,
@@ -171,6 +237,13 @@ plot_qc_stats <- function(
     sample_labeling = c("map_id", "sample_id_rep", "sample_id", "replicate"),
     engine = c("ggplot", "plotly")
 ){
+
+  data <- .resolve_stats_summary_input(
+    data = data,
+    epk = epk,
+    stats_summary = stats_summary,
+    fn_name = "plot_qc_stats"
+  )
 
   # Setup arguments
   engine <- match.arg(engine)
@@ -202,6 +275,14 @@ plot_qc_stats <- function(
   } else {
     stats <- intersect(stats, names(data))
     if (length(stats) == 0) stop("None of the requested stats exist in `data`.")
+  }
+
+  if (!is.null(stats_exclude)) {
+    stats_exclude <- intersect(as.character(stats_exclude), names(data))
+    stats <- setdiff(stats, stats_exclude)
+    if (length(stats) == 0) {
+      stop("No stats remain after applying `stats_exclude`.")
+    }
   }
 
   if (!"condition" %in% names(data)) data$condition <- "all_conditions"
