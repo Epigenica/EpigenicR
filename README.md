@@ -372,15 +372,118 @@ cor_matrices <- compute_all_cor(
 cor_h3k4me3 <- cor_matrices$H3K4me3
 ```
 
+### 5. ChromHMM Enrichment Analysis
+
+Compute enrichment profiles and chromatin state distributions for markers at genomic features 
+using ChromHMM (or other) chromatin state annotations. This workflow generates:
+- **Enrichment profiles**: Signal density at TSS or other regions across samples
+- **Chromatin state distributions**: Mean enrichment per chromatin state (boxplots)
+
+Two main functions support different marker types:
+
+#### Histone Modifications: `run_chromhmm_histone_enrichment()`
+
+```r
+# Prepare BigWig metadata data frame
+bw_df <- data.frame(
+  bw_file = c("file1.bw", "file2.bw", "file3.bw"),
+  marker = c("H3K4me3", "H3K4me3", "INPUT"),
+  sample_id = c("Sample_A", "Sample_A", "Sample_A"),
+  replicate = c("rep1", "pooled", "pooled"),
+  batch = c("B1", "B1", "B1"),
+  scaling = c("scaled", "scaled", "scaled")
+)
+
+loci <- read.table("data/genes_tss_2kb.hg38.bed", header = FALSE)
+loci_gr <- GenomicRanges::GRanges(
+  seqnames = loci$V1,
+  ranges = IRanges::IRanges(loci$V2, loci$V3)
+)
+
+run_chromhmm_histone_enrichment(
+  bw_df = bw_df,
+  bigwig_dir = "path/to/bigwigs",
+  mk = "H3K4me3",
+  loci = loci_gr,
+  output_dir = "output/chromhmm/H3K4me3",
+  chromHmm_path = "data/chromHmm_annotations/",
+  chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+  product = "chromatin"
+)
+```
+
+#### Methylation: `run_chromhmm_methylation_enrichment()`
+
+```r
+run_chromhmm_methylation_enrichment(
+  bw_df = bw_df,
+  bigwig_dir = "path/to/bigwigs",
+  mk = "5mC",
+  loci = loci_gr,
+  output_dir = "output/chromhmm/5mC",
+  chromHmm_path = "data/chromHmm_annotations/",
+  chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+  product = "chromatin"
+)
+```
+
+#### Parallel Execution: `dispatch_chromhmm_jobs()`
+
+For large-scale batch analysis, orchestrate multiple markers in parallel:
+
+```r
+# Define jobs for multiple markers
+jobs <- list(
+  list(
+    fn = run_chromhmm_histone_enrichment,
+    args = list(
+      bw_df = bw_df,
+      bigwig_dir = "path/to/bigwigs",
+      mk = "H3K4me3",
+      loci = loci_gr,
+      output_dir = "output/chromhmm/H3K4me3",
+      chromHmm_path = "data/chromHmm_annotations/",
+      chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+      product = "chromatin"
+    ),
+    mk = "H3K4me3"
+  ),
+  list(
+    fn = run_chromhmm_histone_enrichment,
+    args = list(
+      bw_df = bw_df,
+      bigwig_dir = "path/to/bigwigs",
+      mk = "H3K27ac",
+      loci = loci_gr,
+      output_dir = "output/chromhmm/H3K27ac",
+      chromHmm_path = "data/chromHmm_annotations/",
+      chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+      product = "chromatin"
+    ),
+    mk = "H3K27ac"
+  )
+)
+
+# Dispatch with worker pool (max 4 parallel jobs)
+dispatch_chromhmm_jobs(jobs, n_workers = 4)
+```
+
+**Output**: PNG plots and CSV tables for each marker in the specified `output_dir`.
+
 ## Main Functions
 
 | Function | Description |
 |----------|-------------|
+| `create_epk()` | Create EPK object from BigWig files and annotations |
 | `extract_marker_names()` | Extract marker names from sample IDs |
 | `create_metadata_df()` | Parse BigWig filenames into structured metadata |
 | `plot_qc_stats()` | Generate QC plots (static or interactive) |
+| `scaling_plot()` | Plot scaling factors (msr) across samples |
 | `ensure_gtf_and_beds()` | Download GTF and create BED files for genes/TSS |
 | `download_chromhmm_annotations()` | Retrieve ChromHMM chromatin state annotations |
+| `run_chromhmm_histone_enrichment()` | ChromHMM enrichment for histone modifications |
+| `run_chromhmm_methylation_enrichment()` | ChromHMM enrichment for methylation marks |
+| `dispatch_chromhmm_jobs()` | Parallel orchestration of ChromHMM jobs |
 | `compute_sample_cor()` | Compute sample-sample correlation for one marker |
 | `compute_all_cor()` | Compute correlations across all markers |
 | `print.EPK()` | Print method for EPK objects |
