@@ -437,6 +437,165 @@ plot_qc_stats <- function(
 }
 
 
+#' Plot scaling factors (msr) across samples
+#'
+#' Creates bar plots of scaling factors (\code{msr}) across samples, faceted by
+#' marker. This function follows the same input framework as
+#' \code{plot_qc_stats()} and supports \code{epk}, \code{stats_summary}, or
+#' legacy \code{data} input.
+#'
+#' @param data Backward-compatible alias for \code{stats_summary}. A data frame
+#'   containing at least \code{marker}, \code{sample_id_rep}, and \code{msr}.
+#' @param epk Optional EPK object. If supplied,\code{epk$tables$stats_summary}
+#'   is used as plotting input.
+#' @param stats_summary Optional data frame containing scaling information. If
+#'   provided, it takes precedence over \code{epk} and \code{data}.
+#' @param condition Character vector specifying which conditions to plot.
+#'   \itemize{
+#'     \item \code{NULL}: plot all available conditions as-is (default)
+#'     \item \code{"All"}: collapse all rows into a single condition named \code{"All"}
+#'     \item otherwise: one or more condition names to subset
+#'   }
+#' @param marker_levels Optional character vector defining marker order for
+#'   facet display/fill legend. If \code{NULL}, uses order in data.
+#' @param markers_to_exclude Character vector of markers to remove before
+#'   plotting. Default: \code{"INPUT"}.
+#' @param legend_position Character string passed to
+#'   \code{theme(legend.position = ...)}.
+#' @param save_plots Logical; if \code{TRUE}, save PNG files.
+#' @param save_dir Character path to directory where plots are saved when
+#'   \code{save_plots = TRUE}.
+#' @param ncol Integer; number of facet columns.
+#' @param sample_labeling Character; column used for x-axis labels. One of
+#'   \code{"sample_id_rep"}, \code{"sample_id"}, or \code{"map_id"}.
+#'
+#' @return If one condition is selected, returns one ggplot object. If multiple
+#'   conditions are selected, returns a named list of ggplot objects.
+#'
+#' @examples
+#' \dontrun{
+#' p <- scaling_plot(
+#'   epk = epk,
+#'   condition = "All",
+#'   legend_position = "none",
+#'   ncol = 3,
+#'   sample_labeling = "sample_id_rep"
+#' )
+#' p
+#' }
+#'
+#' @importFrom ggplot2 ggplot geom_bar theme_bw labs geom_hline facet_wrap theme
+#' @importFrom ggplot2 element_text ggsave aes
+#' @importFrom dplyr filter
+#' @export
+scaling_plot <- function(
+  data = NULL,
+  epk = NULL,
+  stats_summary = NULL,
+  condition = NULL,
+  marker_levels = NULL,
+  markers_to_exclude = c("INPUT"),
+  legend_position = c("bottom", "right", "left", "top", "none"),
+  save_plots = FALSE,
+  save_dir = "",
+  ncol = 3,
+  sample_labeling = c("sample_id_rep", "sample_id", "map_id")
+) {
+
+  data <- .resolve_stats_summary_input(
+    data = data,
+    epk = epk,
+    stats_summary = stats_summary,
+    fn_name = "scaling_plot"
+  )
+
+  legend_position <- match.arg(legend_position)
+  sample_labeling <- match.arg(sample_labeling)
+
+  required_cols <- c("marker", "msr", sample_labeling)
+  missing_cols <- setdiff(required_cols, names(data))
+  if (length(missing_cols) > 0) {
+    stop("Missing required column(s): ", paste(missing_cols, collapse = ", "))
+  }
+
+  if (!"condition" %in% names(data)) {
+    data$condition <- "all_conditions"
+  }
+
+  if (!is.null(markers_to_exclude) && length(markers_to_exclude) > 0) {
+    data <- dplyr::filter(data, !(.data$marker %in% markers_to_exclude))
+  }
+
+  if (nrow(data) == 0) {
+    stop("No rows remain after filtering markers. Check 'markers_to_exclude'.")
+  }
+
+  if (is.null(marker_levels)) {
+    marker_levels <- unique(data$marker)
+  }
+  data$marker <- factor(data$marker, levels = marker_levels)
+
+  if (is.null(condition)) {
+    conditions <- unique(data$condition)
+  } else if (identical(condition, "All")) {
+    data$condition <- "All"
+    conditions <- "All"
+  } else {
+    conditions <- condition
+  }
+
+  out <- list()
+
+  if (isTRUE(save_plots) && identical(save_dir, "")) {
+    stop("Please provide a directory to save the plots.")
+  }
+
+  for (cond in conditions) {
+    dfc <- dplyr::filter(data, .data$condition == cond)
+
+    if (nrow(dfc) == 0) {
+      warning("Condition '", cond, "' has no rows; skipping.")
+      next
+    }
+
+    p <- ggplot2::ggplot(
+      dfc,
+      ggplot2::aes(x = .data[[sample_labeling]], y = .data$msr, fill = marker)
+    ) +
+      ggplot2::geom_bar(stat = "identity", position = "dodge") +
+      ggplot2::theme_bw() +
+      ggplot2::labs(
+        title = "Scaling factors (msr) across samples",
+        x = sample_labeling,
+        y = "msr"
+      ) +
+      ggplot2::geom_hline(yintercept = 1) +
+      ggplot2::facet_wrap(~marker, scales = "free_y", ncol = ncol) +
+      ggplot2::theme(
+        axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = legend_position
+      )
+
+    out[[cond]] <- p
+
+    if (isTRUE(save_plots)) {
+      ggplot2::ggsave(
+        filename = file.path(save_dir, paste0("scaling_", cond, ".png")),
+        plot = p,
+        width = 12,
+        height = 7
+      )
+    }
+  }
+
+  if (length(out) == 0) {
+    stop("No plots were created for the requested condition(s).")
+  }
+  if (length(out) == 1) return(out[[1]])
+  out
+}
+
+
 #' Download ChromHMM coreMarks annotation files
 #'
 #' Downloads ChromHMM segmentation BED files from the Roadmap Epigenomics
@@ -757,6 +916,22 @@ ensure_gtf_and_beds <- function(
 print.EPK <- function(x, ...) {
   cat("EPK object\n")
   cat("-----------\n")
+
+  # Extract and display markers
+  markers <- NULL
+  if (!is.null(x$tables$stats_summary) && "marker" %in% names(x$tables$stats_summary)) {
+    markers <- unique(x$tables$stats_summary$marker)
+    markers <- markers[!is.na(markers) & markers != ""]
+  } else if (!is.null(x$mse)) {
+    exps <- MultiAssayExperiment::experiments(x$mse)
+    if (length(exps) > 0) {
+      se <- exps[[1]]
+      markers <- names(SummarizedExperiment::assays(se))
+    }
+  }
+  if (!is.null(markers) && length(markers) > 0) {
+    cat("* Markers:", paste(markers, collapse = ", "), "\n")
+  }
 
   # MultiAssayExperiment summary
   if (!is.null(x$mse)) {
