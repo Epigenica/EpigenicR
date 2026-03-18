@@ -478,6 +478,7 @@ dispatch_chromhmm_jobs(jobs, n_workers = 4)
 | `extract_marker_names()` | Extract marker names from sample IDs |
 | `create_metadata_df()` | Parse BigWig filenames into structured metadata |
 | `plot_qc_stats()` | Generate QC plots (static or interactive) |
+| `plot_enrichment_interactive()` | Interactive enrichment profile plot with hover highlighting |
 | `scaling_plot()` | Plot scaling factors (msr) across samples |
 | `ensure_gtf_and_beds()` | Download GTF and create BED files for genes/TSS |
 | `download_chromhmm_annotations()` | Retrieve ChromHMM chromatin state annotations |
