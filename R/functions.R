@@ -1549,15 +1549,15 @@ calculate_beta_val <- function(epk,
   m3[both_zero] <- NA
 
   if (method == "raw") {
-    beta <- (m2 + pseudocount) / (m2 + m3 + 2 * pseudocount)
-    assay_label <- "beta_raw"
-    SummarizedExperiment::assay(se, assay_label) <- beta
-    MultiAssayExperiment::experiments(epk$mse)[[feature]] <- se
-    message(sprintf(
-      "[beta] Added assay '%s' to experiment '%s' (%d features x %d samples).",
-      assay_label, feature, nrow(beta), ncol(beta)
-    ))
-    return(epk)
+      beta <- (m2 + pseudocount) / (m2 + m3 + 2 * pseudocount)
+      assay_label <- paste0(mbdseq, "_", cxxc, "_raw")
+      SummarizedExperiment::assay(se, assay_label) <- beta
+      MultiAssayExperiment::experiments(epk$mse)[[feature]] <- se
+      message(sprintf(
+        "[beta] Added assay '%s' to experiment '%s' (%d features x %d samples).",
+        assay_label, feature, nrow(beta), ncol(beta)
+      ))
+      return(epk)
   } else if (method == "quantile") {
     if (!requireNamespace("preprocessCore", quietly = TRUE)) {
       stop(
@@ -1571,7 +1571,7 @@ calculate_beta_val <- function(epk,
     dimnames(m2_qn) <- dimnames(m2)
     dimnames(m3_qn) <- dimnames(m3)
     beta <- (m2_qn + pseudocount) / (m2_qn + m3_qn + 2 * pseudocount)
-    assay_label <- "beta_qn"
+    assay_label <- paste0(mbdseq, "_", cxxc, "_qn")
     SummarizedExperiment::assay(se, assay_label) <- beta
     MultiAssayExperiment::experiments(epk$mse)[[feature]] <- se
     message(sprintf(
@@ -1582,7 +1582,8 @@ calculate_beta_val <- function(epk,
   } else if (method == "both") {
     # Raw
     beta_raw <- (m2 + pseudocount) / (m2 + m3 + 2 * pseudocount)
-    SummarizedExperiment::assay(se, "beta_raw") <- beta_raw
+    assay_label_raw <- paste0(mbdseq, "_", cxxc, "_raw")
+    SummarizedExperiment::assay(se, assay_label_raw) <- beta_raw
     # Quantile
     if (!requireNamespace("preprocessCore", quietly = TRUE)) {
       stop(
@@ -1596,11 +1597,12 @@ calculate_beta_val <- function(epk,
     dimnames(m2_qn) <- dimnames(m2)
     dimnames(m3_qn) <- dimnames(m3)
     beta_qn <- (m2_qn + pseudocount) / (m2_qn + m3_qn + 2 * pseudocount)
-    SummarizedExperiment::assay(se, "beta_qn") <- beta_qn
+    assay_label_qn <- paste0(mbdseq, "_", cxxc, "_qn")
+    SummarizedExperiment::assay(se, assay_label_qn) <- beta_qn
     MultiAssayExperiment::experiments(epk$mse)[[feature]] <- se
     message(sprintf(
-      "[beta] Added assays 'beta_raw' and 'beta_qn' to experiment '%s' (%d features x %d samples).",
-      feature, nrow(beta_raw), ncol(beta_raw)
+      "[beta] Added assays '%s' and '%s' to experiment '%s' (%d features x %d samples).",
+      assay_label_raw, assay_label_qn, feature, nrow(beta_raw), ncol(beta_raw)
     ))
     return(epk)
   }
