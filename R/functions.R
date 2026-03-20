@@ -1,3 +1,55 @@
+#' Plot beta-value density distributions from EPK
+#'
+#' Plots density distributions of beta values (raw, quantile-normalized, or both)
+#' for a given feature in an EPK object. Facets by normalization method if both.
+#'
+#' @param epk An EPK object.
+#' @param feature Character; experiment name (e.g. "cpg_islands", "union_peaks").
+#' @param method Character; one of "raw", "quantile", or "both" (default: "both").
+#' @param assay_raw Character; name of the raw beta assay (default: "beta_raw").
+#' @param assay_qn Character; name of the quantile-normalized beta assay (default: "beta_qn").
+#' @return A ggplot object (density plot, faceted if both).
+#' @export
+plot_beta_density <- function(epk,
+                              feature = "cpg_islands",
+                              method = c("both", "raw", "quantile"),
+                              assay_raw = "beta_raw",
+                              assay_qn = "beta_qn") {
+  method <- match.arg(method)
+  se <- MultiAssayExperiment::experiments(epk$mse)[[feature]]
+  dfs <- list()
+  if (method %in% c("raw", "both")) {
+    if (!assay_raw %in% names(SummarizedExperiment::assays(se))) {
+      stop(sprintf("Assay '%s' not found in experiment '%s'", assay_raw, feature))
+    }
+    df_raw <- as.data.frame(SummarizedExperiment::assay(se, assay_raw)) %>%
+      tibble::rownames_to_column("region") %>%
+      tidyr::pivot_longer(-region, names_to = "sample", values_to = "beta") %>%
+      dplyr::mutate(method = "Before QN")
+    dfs[["raw"]] <- df_raw
+  }
+  if (method %in% c("quantile", "both")) {
+    if (!assay_qn %in% names(SummarizedExperiment::assays(se))) {
+      stop(sprintf("Assay '%s' not found in experiment '%s'", assay_qn, feature))
+    }
+    df_qn <- as.data.frame(SummarizedExperiment::assay(se, assay_qn)) %>%
+      tibble::rownames_to_column("region") %>%
+      tidyr::pivot_longer(-region, names_to = "sample", values_to = "beta") %>%
+      dplyr::mutate(method = "After QN")
+    dfs[["qn"]] <- df_qn
+  }
+  df_plot <- dplyr::bind_rows(dfs)
+  p <- ggplot2::ggplot(df_plot, ggplot2::aes(x = beta, colour = sample)) +
+    ggplot2::geom_density(linewidth = 0.7, alpha = 0.8) +
+    ggplot2::facet_wrap(~method, ncol = 2) +
+    ggplot2::theme_minimal() +
+    ggplot2::labs(
+      title = "Beta-value distributions before and after quantile normalization",
+      x = "Beta value",
+      y = "Density"
+    )
+  p
+}
 #' Extract marker names from sample IDs
 #' @param id A character string representing the sample ID.
 #' @param markers A vector of marker names to search for within the sample ID.
