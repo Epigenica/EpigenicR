@@ -48,6 +48,7 @@ Suggests:
     limma,
     apeglm,
     S4Arrays,
+    preprocessCore,
     knitr,
     rmarkdown,
     testthat (>= 3.0.0)

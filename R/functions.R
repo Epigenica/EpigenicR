@@ -1407,3 +1407,160 @@ compute_all_cor <- function(mse, exp_name,
     assay_names
   )
 }
+
+
+#' Calculate beta values from M2 and M3 assays
+#'
+#' Computes beta values as the ratio \eqn{(M2 + p) / (M2 + M3 + 2p)} where
+#' \eqn{p} is the pseudocount.
+#' Regions where both M2 and M3 are zero are set to \code{NA} to avoid bias
+#' from the pseudocount.
+#'
+#' @param epk An EPK object (S3 list with an \code{mse} slot).
+#' @param feature Character; name of the experiment in the
+#'   \code{MultiAssayExperiment} (e.g. \code{"cpg_islands"}, \code{"union_peaks"}).
+#' @param pseudocount Numeric; pseudocount added to numerator and denominator
+#'   (default 1). The denominator receives \code{2 * pseudocount}.
+#' @param method Character; one of \code{"raw"}, \code{"quantile"}, or \code{"both"}.
+#'   \code{"quantile"} applies quantile normalisation to mbdseq and cxxc separately
+#'   before computing the ratio (requires the \pkg{preprocessCore} package).
+#'   \code{"both"} computes and stores both raw and quantile-normalized beta assays.
+#' @param mbdseq Character; name of the MBD-seq assay (default \code{"mbdseq"}).
+#' @param cxxc Character; name of the CXXC assay (default \code{"cxxc"}).
+#'
+#' @return The EPK object with a new assay added to the specified experiment:
+#'   \code{"beta_raw"} or \code{"beta_qn"} depending on \code{method}.
+#'
+#' @examples
+#' \dontrun{
+#' epk <- readRDS("project.epk.rds")
+#'
+#' # Raw beta values on CpG islands (default)
+#' epk <- calculate_beta_val(epk)
+#'
+#' # Quantile-normalised beta on union peaks
+#' epk <- calculate_beta_val(epk, feature = "union_peaks", method = "quantile")
+#'
+#' # Custom pseudocount
+#' epk <- calculate_beta_val(epk, pseudocount = 0.5, method = "raw")
+#' }
+#'
+#' @export
+calculate_beta_val <- function(epk,
+                               feature = "cpg_islands",
+                               pseudocount = 1,
+                               method = c("raw", "quantile", "both"),
+                               mbdseq = "mbdseq",
+                               cxxc = "cxxc") {
+  method <- match.arg(method)
+
+  ## ---- validate EPK and extract SE ----
+  if (!inherits(epk, "EPK") && is.null(epk$mse)) {
+    stop("`epk` must be an EPK object with an `mse` slot.", call. = FALSE)
+  }
+
+  exp_names <- names(MultiAssayExperiment::experiments(epk$mse))
+  if (!feature %in% exp_names) {
+    stop(
+      sprintf("Feature '%s' not found in EPK. Available: %s",
+              feature, paste(exp_names, collapse = ", ")),
+      call. = FALSE
+    )
+  }
+
+  se <- MultiAssayExperiment::experiments(epk$mse)[[feature]]
+
+  avail <- names(SummarizedExperiment::assays(se))
+  missing <- setdiff(c(mbdseq, cxxc), avail)
+  if (length(missing) > 0) {
+    stop(
+      sprintf("Assay(s) not found in '%s': %s. Available: %s",
+              feature, paste(missing, collapse = ", "),
+              paste(avail, collapse = ", ")),
+      call. = FALSE
+    )
+  }
+
+  ## ---- extract matrices ----
+  m2 <- as.matrix(SummarizedExperiment::assay(se, mbdseq))
+  m3 <- as.matrix(SummarizedExperiment::assay(se, cxxc))
+
+  stopifnot(
+    all(dim(m2) == dim(m3)),
+    all(rownames(m2) == rownames(m3)),
+    all(colnames(m2) == colnames(m3))
+  )
+
+  ## ---- mask double-zero regions ----
+  both_zero <- m2 == 0 & m3 == 0
+  m2[both_zero] <- NA
+  m3[both_zero] <- NA
+
+  if (method == "raw") {
+    beta <- (m2 + pseudocount) / (m2 + m3 + 2 * pseudocount)
+    assay_label <- "beta_raw"
+    SummarizedExperiment::assay(se, assay_label) <- beta
+    MultiAssayExperiment::experiments(epk$mse)[[feature]] <- se
+    message(sprintf(
+      "[beta] Added assay '%s' to experiment '%s' (%d features x %d samples).",
+      assay_label, feature, nrow(beta), ncol(beta)
+    ))
+    return(epk)
+  } else if (method == "quantile") {
+    if (!requireNamespace("preprocessCore", quietly = TRUE)) {
+      stop(
+        "Package 'preprocessCore' is required for method = \"quantile\". ",
+        "Install it with: BiocManager::install(\"preprocessCore\")",
+        call. = FALSE
+      )
+    }
+    m2_qn <- preprocessCore::normalize.quantiles(m2)
+    m3_qn <- preprocessCore::normalize.quantiles(m3)
+    dimnames(m2_qn) <- dimnames(m2)
+    dimnames(m3_qn) <- dimnames(m3)
+    beta <- (m2_qn + pseudocount) / (m2_qn + m3_qn + 2 * pseudocount)
+    assay_label <- "beta_qn"
+    SummarizedExperiment::assay(se, assay_label) <- beta
+    MultiAssayExperiment::experiments(epk$mse)[[feature]] <- se
+    message(sprintf(
+      "[beta] Added assay '%s' to experiment '%s' (%d features x %d samples).",
+      assay_label, feature, nrow(beta), ncol(beta)
+    ))
+    return(epk)
+  } else if (method == "both") {
+    # Raw
+    beta_raw <- (m2 + pseudocount) / (m2 + m3 + 2 * pseudocount)
+    SummarizedExperiment::assay(se, "beta_raw") <- beta_raw
+    # Quantile
+    if (!requireNamespace("preprocessCore", quietly = TRUE)) {
+      stop(
+        "Package 'preprocessCore' is required for method = \"both\" (quantile part). ",
+        "Install it with: BiocManager::install(\"preprocessCore\")",
+        call. = FALSE
+      )
+    }
+    m2_qn <- preprocessCore::normalize.quantiles(m2)
+    m3_qn <- preprocessCore::normalize.quantiles(m3)
+    dimnames(m2_qn) <- dimnames(m2)
+    dimnames(m3_qn) <- dimnames(m3)
+    beta_qn <- (m2_qn + pseudocount) / (m2_qn + m3_qn + 2 * pseudocount)
+    SummarizedExperiment::assay(se, "beta_qn") <- beta_qn
+    MultiAssayExperiment::experiments(epk$mse)[[feature]] <- se
+    message(sprintf(
+      "[beta] Added assays 'beta_raw' and 'beta_qn' to experiment '%s' (%d features x %d samples).",
+      feature, nrow(beta_raw), ncol(beta_raw)
+    ))
+    return(epk)
+  }
+
+  ## ---- store back into EPK ----
+  SummarizedExperiment::assay(se, assay_label) <- beta
+  MultiAssayExperiment::experiments(epk$mse)[[feature]] <- se
+
+  message(sprintf(
+    "[beta] Added assay '%s' to experiment '%s' (%d features x %d samples).",
+    assay_label, feature, nrow(beta), ncol(beta)
+  ))
+
+  epk
+}
