@@ -295,7 +295,7 @@ run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
 
   p_enrich <- p_enrich +
     ggplot2::theme_bw(base_size = 16) +
-    ggplot2::labs(x = paste0(mk, " Protein coding (", length(loci), ") loci")) +
+    ggplot2::labs(x = paste0(mk, " CpG islands (", length(loci), ") loci")) +
     ggplot2::guides(color = ggplot2::guide_legend(ncol = 1, byrow = TRUE)) +
     ggplot2::theme(
       legend.position = "right",
@@ -303,7 +303,7 @@ run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
     )
 
   ggplot2::ggsave(
-    file.path(output_dir, "methylation_profile_center.png"),
+    file.path(output_dir, paste0(mk, "_profile_center.png")),
     plot = p_enrich,
     width = 12,
     height = 8
@@ -311,7 +311,7 @@ run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
 
   write.table(
     p_enrich$data,
-    file.path(output_dir, "methylation_profile_center_data.csv"),
+    file.path(output_dir, paste0(mk, "_profile_center_data.csv")),
     row.names = FALSE,
     quote = FALSE,
     col.names = TRUE,
