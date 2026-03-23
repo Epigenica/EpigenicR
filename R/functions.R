@@ -1,3 +1,16 @@
+# Derived info
+  if (!is.null(x$derived) && length(x$derived) > 0) {
+    cat("* Derived:")
+    for (nm in names(x$derived)) {
+      obj <- x$derived[[nm]]
+      if (is.list(obj)) {
+        cat(sprintf("\n  - %s: list with %d entries", nm, length(obj)))
+      } else if (!is.null(obj)) {
+        cat(sprintf("\n  - %s: <%s>", nm, class(obj)[1]))
+      }
+    }
+    cat("\n")
+  }
 #' Plot beta-value density distributions from EPK
 #'
 #' Plots density distributions of beta values (raw, quantile-normalized, or both)
@@ -9,6 +22,11 @@
 #' @param assay_raw Character; name of the raw beta assay (default: "beta_raw").
 #' @param assay_qn Character; name of the quantile-normalized beta assay (default: "beta_qn").
 #' @return A ggplot object (density plot, faceted if both).
+## Example usage:
+#' @examples
+#' # Assuming you have an EPK object named epk
+#' plot_beta_density(epk, feature = "cpg_islands", method = "both")
+#' plot_beta_density(epk, feature = "genes", method = "raw")
 #' @export
 plot_beta_density <- function(epk,
                               feature = "cpg_islands",
@@ -29,7 +47,7 @@ plot_beta_density <- function(epk,
     dfs[["raw"]] <- df_raw
   }
   if (method %in% c("quantile", "both")) {
-    if (!assay_qn %in% names(SummarizedExperiment::assays(se))) {
+    if (!assay_qn %in% names(SummaraturExperiment::assays(se))) {
       stop(sprintf("Assay '%s' not found in experiment '%s'", assay_qn, feature))
     }
     df_qn <- as.data.frame(SummarizedExperiment::assay(se, assay_qn)) %>%
@@ -54,6 +72,12 @@ plot_beta_density <- function(epk,
 #' @param id A character string representing the sample ID.
 #' @param markers A vector of marker names to search for within the sample ID.
 #' @return A character vector containing the extracted marker names.
+## Example usage:
+#' @examples
+#' # Compute and add sample correlations for all experiments
+#' epk <- compute_sample_cor(epk, method = "pearson", transform = "none")
+#' # Access correlations:
+#' # epk$derived$sample_cor
 #' @export
 #' @examples
 #' id <- "Sample1_H3K4me3_Rep1"
@@ -1380,6 +1404,21 @@ print.EPK <- function(x, ...) {
     }
   }
 
+
+  # Derived info (print before annotation to ensure visibility)
+  if (!is.null(x$derived) && length(x$derived) > 0) {
+    cat("* Derived:")
+    for (nm in names(x$derived)) {
+      obj <- x$derived[[nm]]
+      if (is.list(obj)) {
+        cat(sprintf("\n  - %s: list with %d entries", nm, length(obj)))
+      } else if (!is.null(obj)) {
+        cat(sprintf("\n  - %s: <%s>", nm, class(obj)[1]))
+      }
+    }
+    cat("\n")
+  }
+
   # Annotation: features annotation
   if (!is.null(x$annotation) && length(x$annotation) > 0) {
     cat("* Annotation:\n")
@@ -1427,13 +1466,34 @@ print.EPK <- function(x, ...) {
 #'
 #' @return A numeric matrix (samples × samples) of correlations.
 #' @export
-compute_sample_cor <- function(se, assay_name,
-                               method = "pearson",
-                               transform = c("none", "log1p")) {
+
+#' Compute sample–sample correlations for all experiments in an EPK object
+#'
+#' @param epk An EPK object (S3 list with an `mse` slot).
+#' @param method Correlation method. One of "pearson" or "spearman".
+#' @param transform Optional transformation applied before correlation.
+#' @return The EPK object with a new slot epk$derived$sample_cor containing the correlations.
+#' @export
+compute_sample_cor <- function(epk, method = "pearson", transform = c("none", "log1p")) {
   transform <- match.arg(transform)
-  m <- SummarizedExperiment::assay(se, assay_name)
-  if (transform == "log1p") m <- log1p(m)
-  stats::cor(m, use = "pairwise.complete.obs", method = method)
+  exp_names <- names(MultiAssayExperiment::experiments(epk$mse))
+  sample_cor_list <- setNames(
+    lapply(exp_names, function(exp) {
+      se <- MultiAssayExperiment::experiments(epk$mse)[[exp]]
+      assay_names <- names(SummarizedExperiment::assays(se))
+      setNames(
+        lapply(assay_names, function(a) {
+          m <- SummarizedExperiment::assay(se, a)
+          if (transform == "log1p") m <- log1p(m)
+          stats::cor(m, use = "pairwise.complete.obs", method = method)
+        }),
+        assay_names
+      )
+    }),
+    exp_names
+  )
+  epk$derived <- c(epk$derived, list(sample_cor = sample_cor_list))
+  epk
 }
 
 
@@ -1449,16 +1509,38 @@ compute_sample_cor <- function(se, assay_name,
 #'
 #' @return A named list of correlation matrices, one per marker.
 #' @export
-compute_all_cor <- function(mse, exp_name,
-                            method = "pearson",
-                            transform = "log1p") {
-  se <- MultiAssayExperiment::experiments(mse)[[exp_name]]
+
+#' Compute sample–sample correlations for all assays in a specified experiment of an EPK object
+#'
+#' @param epk An EPK object (S3 list with an `mse` slot).
+#' @param exp_name Name of the experiment (e.g. "protein_coding").
+#' @param method Correlation method. One of "pearson" or "spearman".
+#' @param transform Optional transformation applied before correlation.
+#' @return The EPK object with a new slot epk$derived$all_cor containing the correlations for the specified experiment.
+#' ## Example usage:
+#' @examples
+#' # Compute and add all correlations for a specific experiment
+#' epk <- compute_all_cor(epk, exp_name = "genes", method = "pearson", transform = "none")
+#' # Access correlations:
+#' # epk$derived$all_cor[["genes"]]
+#' @export
+compute_all_cor <- function(epk, exp_name, method = "pearson", transform = c("none", "log1p")) {
+  transform <- match.arg(transform)
+  se <- MultiAssayExperiment::experiments(epk$mse)[[exp_name]]
   assay_names <- names(SummarizedExperiment::assays(se))
-  setNames(
-    lapply(assay_names, \(a) compute_sample_cor(se, a, method, transform)),
+  all_cor_list <- setNames(
+    lapply(assay_names, function(a) {
+      m <- SummarizedExperiment::assay(se, a)
+      if (transform == "log1p") m <- log1p(m)
+      stats::cor(m, use = "pairwise.complete.obs", method = method)
+    }),
     assay_names
   )
+  if (is.null(epk$derived)) epk$derived <- list()
+  epk$derived$all_cor <- c(epk$derived$all_cor, setNames(list(all_cor_list), exp_name))
+  epk
 }
+
 
 
 #' Calculate beta values from M2 and M3 assays
@@ -1618,3 +1700,53 @@ calculate_beta_val <- function(epk,
 
   epk
 }
+
+#' Plot a correlation heatmap for one or more markers in an EPK experiment
+#'
+#' @param epk An EPK object.
+#' @param exp_name Name of the experiment (e.g. "protein_coding").
+#' @param marker Name or vector of marker(s)/assay(s) (e.g. "H3K4me3" or c("5mC", "CXXC")).
+#' @return A ComplexHeatmap::Heatmap object (single marker) or a list of Heatmap objects (multiple markers).
+#' @examples
+#' # Compute correlations first:
+#' epk <- compute_all_cor(epk, exp_name = "genes")
+#' # Plot heatmap for a single marker
+#' heatmap_cor_marker(epk, exp_name = "genes", marker = "H3K4me3")
+#' # Plot heatmaps for multiple markers
+#' heatmap_cor_marker(epk, exp_name = "genes", marker = c("5mC", "CXXC"))
+#' @export
+heatmap_cor_marker <- function(epk, exp_name, marker) {
+  # Helper for a single marker
+  plot_one <- function(m) {
+    cor_mat <- NULL
+    if (!is.null(epk$derived) && !is.null(epk$derived$all_cor) &&
+        !is.null(epk$derived$all_cor[[exp_name]]) &&
+        !is.null(epk$derived$all_cor[[exp_name]][[m]])) {
+      cor_mat <- epk$derived$all_cor[[exp_name]][[m]]
+    } else {
+      stop(sprintf(
+        "No correlation matrix found for experiment '%s', marker '%s'.\nRun compute_all_cor(epk, '%s') first.",
+        exp_name, m, exp_name))
+    }
+    stopifnot(is.matrix(cor_mat), !is.null(rownames(cor_mat)), !is.null(colnames(cor_mat)))
+    ord <- hclust(as.dist(1 - cor_mat))$order
+    col_fun <- circlize::colorRamp2(c(0, 0.5, 1), c("white", "#fdae61", "#d73027"))
+    ComplexHeatmap::Heatmap(
+      cor_mat[ord, ord, drop = FALSE],
+      name = paste0("cor_", m),
+      col = col_fun,
+      cluster_rows = TRUE,
+      cluster_columns = TRUE,
+      show_row_names = TRUE,
+      show_column_names = TRUE,
+      column_title = paste0("Sample–sample correlation, ", exp_name, ": ", m),
+      heatmap_legend_param = list(title = "Correlation")
+    )
+  }
+  if (length(marker) == 1) {
+    plot_one(marker)
+  } else {
+    lapply(marker, plot_one)
+  }
+}
+
