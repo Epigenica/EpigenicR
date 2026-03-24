@@ -8,9 +8,9 @@ calculate_beta_val(
   epk,
   feature = "cpg_islands",
   pseudocount = 1,
-  method = c("raw", "quantile"),
-  assay_m2 = "M2",
-  assay_m3 = "M3"
+  method = c("raw", "quantile", "both"),
+  mbdseq = "mbdseq",
+  cxxc = "cxxc"
 )
 }
 \arguments{
@@ -22,13 +22,14 @@ calculate_beta_val(
 \item{pseudocount}{Numeric; pseudocount added to numerator and denominator
 (default 1). The denominator receives \code{2 * pseudocount}.}
 
-\item{method}{Character; one of \code{"raw"} or \code{"quantile"}.
-\code{"quantile"} applies quantile normalisation to M2 and M3 separately
-before computing the ratio (requires the \pkg{preprocessCore} package).}
+\item{method}{Character; one of \code{"raw"}, \code{"quantile"}, or \code{"both"}.
+\code{"quantile"} applies quantile normalisation to mbdseq and cxxc separately
+before computing the ratio (requires the \pkg{preprocessCore} package).
+\code{"both"} computes and stores both raw and quantile-normalized beta assays.}
 
-\item{assay_m2}{Character; name of the M2 assay (default \code{"M2"}).}
+\item{mbdseq}{Character; name of the MBD-seq assay (default \code{"mbdseq"}).}
 
-\item{assay_m3}{Character; name of the M3 assay (default \code{"M3"}).}
+\item{cxxc}{Character; name of the CXXC assay (default \code{"cxxc"}).}
 }
 \value{
 The EPK object with a new assay added to the specified experiment:

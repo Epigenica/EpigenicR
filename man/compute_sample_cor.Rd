@@ -4,25 +4,23 @@
 \alias{compute_sample_cor}
 \title{Compute sample–sample correlation for one marker}
 \usage{
-compute_sample_cor(
-  se,
-  assay_name,
-  method = "pearson",
-  transform = c("none", "log1p")
-)
+compute_sample_cor(epk, method = "pearson", transform = c("none", "log1p"))
 }
 \arguments{
+\item{epk}{An EPK object (S3 list with an `mse` slot).}
+
+\item{method}{Correlation method. One of "pearson" or "spearman".}
+
+\item{transform}{Optional transformation applied before correlation.}
+
 \item{se}{A \code{SummarizedExperiment}.}
 
 \item{assay_name}{Name of the assay (marker).}
-
-\item{method}{Correlation method. One of \code{"pearson"} or \code{"spearman"}.}
-
-\item{transform}{Optional transformation applied before correlation.
-One of \code{"none"} or \code{"log1p"}.}
 }
 \value{
 A numeric matrix (samples × samples) of correlations.
+
+The EPK object with a new slot epk$derived$sample_cor containing the correlations.
 }
 \description{
 Computes a correlation matrix between samples for a single assay

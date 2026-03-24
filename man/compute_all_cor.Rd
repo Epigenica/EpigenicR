@@ -4,21 +4,37 @@
 \alias{compute_all_cor}
 \title{Compute sample–sample correlations for all markers}
 \usage{
-compute_all_cor(mse, exp_name, method = "pearson", transform = "log1p")
+compute_all_cor(
+  epk,
+  exp_name,
+  method = "pearson",
+  transform = c("none", "log1p")
+)
 }
 \arguments{
-\item{mse}{A \code{MultiAssayExperiment}.}
+\item{epk}{An EPK object (S3 list with an `mse` slot).}
 
-\item{exp_name}{Name of the experiment (e.g. \code{"protein_coding"}).}
+\item{exp_name}{Name of the experiment (e.g. "protein_coding").}
 
-\item{method}{Correlation method. One of \code{"pearson"} or \code{"spearman"}.}
+\item{method}{Correlation method. One of "pearson" or "spearman".}
 
 \item{transform}{Optional transformation applied before correlation.}
+
+\item{mse}{A \code{MultiAssayExperiment}.}
 }
 \value{
 A named list of correlation matrices, one per marker.
+
+The EPK object with a new slot epk$derived$all_cor containing the correlations for the specified experiment.
+## Example usage:
 }
 \description{
 Computes sample–sample correlation matrices for all assays (markers)
 within one experiment of a \code{MultiAssayExperiment}.
+}
+\examples{
+# Compute and add all correlations for a specific experiment
+epk <- compute_all_cor(epk, exp_name = "genes", method = "pearson", transform = "none")
+# Access correlations:
+# epk$derived$all_cor[["genes"]]
 }
