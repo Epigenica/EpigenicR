@@ -1537,7 +1537,8 @@ compute_all_cor <- function(epk, exp_name, method = "pearson", transform = c("no
     assay_names
   )
   if (is.null(epk$derived)) epk$derived <- list()
-  epk$derived$all_cor <- c(epk$derived$all_cor, setNames(list(all_cor_list), exp_name))
+  if (is.null(epk$derived$all_cor)) epk$derived$all_cor <- list()
+  epk$derived$all_cor[[exp_name]] <- all_cor_list
   epk
 }
 
