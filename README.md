@@ -374,101 +374,183 @@ cor_h3k4me3 <- cor_matrices$H3K4me3
 
 ### 5. ChromHMM Enrichment Analysis
 
-Compute enrichment profiles and chromatin state distributions for markers at genomic features 
+Compute enrichment profiles and chromatin state distributions for markers at genomic features
 using ChromHMM (or other) chromatin state annotations. This workflow generates:
 - **Enrichment profiles**: Signal density at TSS or other regions across samples
 - **Chromatin state distributions**: Mean enrichment per chromatin state (boxplots)
 
-Two main functions support different marker types:
+Two worker functions handle different marker types; `dispatch_chromhmm_jobs()` orchestrates
+them in parallel using `callr` background processes.
 
-#### Histone Modifications: `run_chromhmm_histone_enrichment()`
+#### Setup requirements
 
 ```r
-# Prepare BigWig metadata data frame
-bw_df <- data.frame(
-  bw_file = c("file1.bw", "file2.bw", "file3.bw"),
-  marker = c("H3K4me3", "H3K4me3", "INPUT"),
-  sample_id = c("Sample_A", "Sample_A", "Sample_A"),
-  replicate = c("rep1", "pooled", "pooled"),
-  batch = c("B1", "B1", "B1"),
-  scaling = c("scaled", "scaled", "scaled")
-)
+library(EpigenicR)
 
-loci <- read.table("data/genes_tss_2kb.hg38.bed", header = FALSE)
-loci_gr <- GenomicRanges::GRanges(
-  seqnames = loci$V1,
-  ranges = IRanges::IRanges(loci$V2, loci$V3)
-)
+# Discover BigWig files
+bw_files <- list.files(bigwig_dir, pattern = "\\.bw$", full.names = TRUE, recursive = FALSE)
+if (length(bw_files) == 0) stop("No .bw files found in bigwig_dir: ", bigwig_dir)
 
-run_chromhmm_histone_enrichment(
-  bw_df = bw_df,
-  bigwig_dir = "path/to/bigwigs",
-  mk = "H3K4me3",
-  loci = loci_gr,
-  output_dir = "output/chromhmm/H3K4me3",
-  chromHmm_path = "data/chromHmm_annotations/",
-  chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-  product = "chromatin"
+# Parse metadata from filenames
+bw_df <- create_metadata_df(bw_files = bw_files)
+
+# Drop rows that did not match the expected naming schema
+if ("matched" %in% names(bw_df) && any(!bw_df$matched)) {
+  warning("Some bigWig files did not match the expected naming pattern and were dropped.")
+  bw_df <- bw_df[bw_df$matched, , drop = FALSE]
+}
+
+# Product-specific scaling filter
+# GenomePro uses scaled bigWigs; all others use unscaled
+if (product == "GenomePro") {
+  bw_df <- bw_df[bw_df$scaling == "scaled" | bw_df$marker == "INPUT", , drop = FALSE]
+} else {
+  bw_df <- bw_df[bw_df$scaling == "unscaled", , drop = FALSE]
+}
+
+# Absolute paths (bw_file may be basename-only from the parser)
+bw_df$bw_path <- ifelse(
+  grepl("^/", bw_df$bw_file),
+  bw_df$bw_file,
+  file.path(bigwig_dir, bw_df$bw_file)
 )
 ```
+
+#### Single-marker run: `run_chromhmm_histone_enrichment()`
+
+```r
+loci_gr <- readRDS("data/genes_protein_coding_gr.rds")   # GRanges object
+
+run_chromhmm_histone_enrichment(
+  bw_df        = bw_df,
+  bigwig_dir   = bigwig_dir,
+  mk           = "H3K4me3",
+  loci         = loci_gr,
+  output_dir   = "output/chromhmm/H3K4me3",
+  chromHmm_path       = "data/chromHmm_annotations/",
+  chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+  product      = product
+)
+```
+
+Output files written to `output_dir`:
+
+| File | Description |
+|------|-------------|
+| `<marker>_profile_start.png` | Enrichment profile at TSS |
+| `<marker>_profile_start_data.csv` | Profile data table |
+| `<marker>_chromatin_state_dist.png` | Chromatin state distribution boxplot |
+| `<marker>_chromatin_state_dist.csv` | State distribution table |
+| `.done` | Sentinel written on successful completion |
 
 #### Methylation: `run_chromhmm_methylation_enrichment()`
 
 ```r
 run_chromhmm_methylation_enrichment(
-  bw_df = bw_df,
-  bigwig_dir = "path/to/bigwigs",
-  mk = "5mC",
-  loci = loci_gr,
-  output_dir = "output/chromhmm/5mC",
-  chromHmm_path = "data/chromHmm_annotations/",
+  bw_df        = bw_df,
+  bigwig_dir   = bigwig_dir,
+  mk           = "5mC",
+  loci         = loci_gr,
+  output_dir   = "output/chromhmm/5mC",
+  chromHmm_path       = "data/chromHmm_annotations/",
   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-  product = "chromatin"
+  product      = product
 )
 ```
 
-#### Parallel Execution: `dispatch_chromhmm_jobs()`
+#### Parallel batch run: `dispatch_chromhmm_jobs()`
 
-For large-scale batch analysis, orchestrate multiple markers in parallel:
+For large-scale analysis, run all histone markers concurrently in `callr` background
+processes. The function maintains a rolling worker pool of size `n_workers`, polling
+every second and logging per-marker progress and errors.
 
 ```r
-# Define jobs for multiple markers
-jobs <- list(
-  list(
-    fn = run_chromhmm_histone_enrichment,
-    args = list(
-      bw_df = bw_df,
-      bigwig_dir = "path/to/bigwigs",
-      mk = "H3K4me3",
-      loci = loci_gr,
-      output_dir = "output/chromhmm/H3K4me3",
-      chromHmm_path = "data/chromHmm_annotations/",
-      chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-      product = "chromatin"
-    ),
-    mk = "H3K4me3"
-  ),
-  list(
-    fn = run_chromhmm_histone_enrichment,
-    args = list(
-      bw_df = bw_df,
-      bigwig_dir = "path/to/bigwigs",
-      mk = "H3K27ac",
-      loci = loci_gr,
-      output_dir = "output/chromhmm/H3K27ac",
-      chromHmm_path = "data/chromHmm_annotations/",
-      chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-      product = "chromatin"
-    ),
-    mk = "H3K27ac"
-  )
+# Markers to process (exclude INPUT control)
+markers_to_run <- unique(epk$tables$stats_summary$marker)
+markers_to_run <- markers_to_run[markers_to_run != "INPUT"]
+
+# Auto-detect worker count: one core per marker, leaving one core free
+# Set n_workers = 0 to trigger auto-detection; any positive integer overrides it
+n_workers_param <- 0L   # or set explicitly, e.g. 4L
+n_workers <- if (n_workers_param == 0L) {
+  max(1L, min(length(markers_to_run), parallel::detectCores() - 1L))
+} else {
+  as.integer(n_workers_param)
+}
+
+output_dir_path <- "output/chromhmm/protein_coding"
+dir.create(output_dir_path, recursive = TRUE, showWarnings = FALSE)
+
+# Skip markers whose output directory already contains a .done sentinel
+.expected_histone <- function(op, mk) c(
+  file.path(op, paste0(mk, "_profile_start.png")),
+  file.path(op, paste0(mk, "_chromatin_state_dist.png")),
+  file.path(op, paste0(mk, "_chromatin_state_dist.csv"))
 )
 
-# Dispatch with worker pool (max 4 parallel jobs)
-dispatch_chromhmm_jobs(jobs, n_workers = 4)
+markers_needed <- Filter(function(mk) {
+  op <- file.path(output_dir_path, mk)
+  !file.exists(file.path(op, ".done")) || !all(file.exists(.expected_histone(op, mk)))
+}, markers_to_run)
+
+if (length(markers_needed) > 0) {
+  common_args <- list(
+    bw_df               = bw_df,
+    bigwig_dir          = bigwig_dir,
+    loci                = loci_gr,
+    chromHmm_path       = "data/chromHmm_annotations/",
+    chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+    product             = product
+  )
+
+  jobs <- lapply(markers_needed, function(mk) {
+    op <- file.path(output_dir_path, mk)
+    dir.create(op, recursive = TRUE, showWarnings = FALSE)
+    list(
+      fn   = run_chromhmm_histone_enrichment,
+      mk   = mk,
+      args = c(list(mk = mk, output_dir = op), common_args)
+    )
+  })
+
+  # Parallel: rolling worker pool via callr background processes
+  dispatch_chromhmm_jobs(jobs, n_workers = n_workers)
+
+  # Sequential alternative (IDE-safe, blocking):
+  # for (job in jobs) callr::r(func = job$fn, args = job$args)
+}
 ```
 
-**Output**: PNG plots and CSV tables for each marker in the specified `output_dir`.
+#### Setting `n_workers`
+
+| Value | Behaviour |
+|-------|-----------|
+| `0L` | Auto-detect: `min(n_markers, detectCores() - 1)` |
+| `1L` | Effectively sequential but still uses a background process |
+| `N > 1` | Up to N markers run concurrently |
+
+Use `1L` or the sequential loop when debugging; use auto-detect for production runs.
+
+#### Troubleshooting
+
+**Empty BigWig inputs**: If `bw_df` is empty after filtering, check:
+- BigWig filenames match the EpiFinder naming convention (see `create_metadata_df()`)
+- `product` value matches available `scaling` column values (`"scaled"` vs `"unscaled"`)
+- Files physically exist: `file.exists(bw_df$bw_path)`
+
+**Worker errors**: `dispatch_chromhmm_jobs()` warns on non-zero exit and prints the
+worker's stderr. To reproduce an error interactively, run the failing job directly:
+```r
+callr::r(func = run_chromhmm_histone_enrichment, args = jobs[[i]]$args)
+```
+
+**Stale `.done` sentinels**: Delete the per-marker output directory (or just the `.done`
+file) to force re-computation:
+```r
+file.remove(file.path(output_dir_path, "H3K4me3", ".done"))
+```
+
+**Output**: PNG plots and CSV tables written per marker under `output_dir/<marker>/`.
 
 ## Main Functions
 

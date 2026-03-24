@@ -17,13 +17,13 @@
 #' @param product Character; product type ("cNUC" uses unscaled bigWigs;
 #'   others use scaled).
 #'
-#' @return Invisibly returns \code{NULL}. Writes:
+#' @return Invisibly returns \code{NULL}. Writes to \code{output_dir}:
 #'   \itemize{
 #'     \item PNG: enrichment profile plot (\code{<marker>_profile_start.png})
 #'     \item CSV: profile data (\code{<marker>_profile_start_data.csv})
 #'     \item PNG: chromatin state distribution (\code{<marker>_chromatin_state_dist.png})
 #'     \item CSV: chromatin state summary (\code{<marker>_chromatin_state_dist.csv})
-#'     \item Marker file: \code{.done} upon completion
+#'     \item Sentinel file: \code{.done} written on successful completion
 #'   }
 #'
 #' @details
@@ -69,8 +69,8 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
   # --- enrichment profile ---
-  bw_df_subset <- bw_df %>%
-    dplyr::filter(replicate == "pooled") %>%
+  bw_df_subset <- bw_df |>
+    dplyr::filter(replicate == "pooled") |>
     dplyr::filter(marker %in% c(mk, "INPUT"))
 
   allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
@@ -125,7 +125,7 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
   # --- chromHMM boxplot ---
   scaling_type <- if (product != "cNUC") "scaled" else "unscaled"
 
-  bw_df_subset <- bw_df %>%
+  bw_df_subset <- bw_df |>
     dplyr::filter(
       marker %in% c(mk, "INPUT"),
       scaling == scaling_type,
@@ -145,12 +145,12 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
       remove_top = 0.01
     )
 
-    tmp_df <- p_heatmap@data %>%
-      dplyr::mutate(sample_rep = stringr::str_split(variable, "_")) %>%
+    tmp_df <- p_heatmap@data |>
+      dplyr::mutate(sample_rep = stringr::str_split(variable, "_")) |>
       dplyr::mutate(
         sample_id = gsub(sapply(sample_rep, `[`, 1), pattern = "\\.", replacement = "_"),
         replicate = sapply(sample_rep, `[`, 2)
-      ) %>%
+      ) |>
       dplyr::select(-sample_rep)
 
     colnames(tmp_df) <- c(
@@ -187,6 +187,8 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
     )
   }
 
+  file.create(file.path(output_dir, ".done"))
+  invisible(NULL)
 }
 
 #' Run ChromHMM enrichment analysis for methylation marks
@@ -260,8 +262,8 @@ run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
   # --- enrichment profile ---
-  bw_df_subset <- bw_df %>%
-    dplyr::filter(replicate == "pooled") %>%
+  bw_df_subset <- bw_df |>
+    dplyr::filter(replicate == "pooled") |>
     dplyr::filter(marker %in% c("5mC", "CXXC"))
 
   allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
@@ -335,12 +337,12 @@ run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
     remove_top = 0.01
   )
 
-  tmp_df <- p_heatmap@data %>%
-    dplyr::mutate(sample_rep = stringr::str_split(variable, "_")) %>%
+  tmp_df <- p_heatmap@data |>
+    dplyr::mutate(sample_rep = stringr::str_split(variable, "_")) |>
     dplyr::mutate(
       sample_id = gsub(sapply(sample_rep, `[`, 1), pattern = "\\.", replacement = "_"),
       replicate = sapply(sample_rep, `[`, 2)
-    ) %>%
+    ) |>
     dplyr::select(-sample_rep)
 
   colnames(tmp_df) <- c(
