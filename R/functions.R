@@ -1,16 +1,3 @@
-# Derived info
-  if (!is.null(x$derived) && length(x$derived) > 0) {
-    cat("* Derived:")
-    for (nm in names(x$derived)) {
-      obj <- x$derived[[nm]]
-      if (is.list(obj)) {
-        cat(sprintf("\n  - %s: list with %d entries", nm, length(obj)))
-      } else if (!is.null(obj)) {
-        cat(sprintf("\n  - %s: <%s>", nm, class(obj)[1]))
-      }
-    }
-    cat("\n")
-  }
 #' Plot beta-value density distributions from EPK
 #'
 #' Plots density distributions of beta values (raw, quantile-normalized, or both)
