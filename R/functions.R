@@ -407,9 +407,13 @@ plot_qc_stats <- function(
       out[[cond]] <- composed
 
       if (should_save_plots) {
+        n_samples <- length(unique(dfc[[sample_labeling]]))
+        legend_ncol <- max(1L, ceiling(n_samples / 4L))
+        save_plot <- composed &
+          ggplot2::guides(color = ggplot2::guide_legend(ncol = legend_ncol))
         ggplot2::ggsave(
           filename = file.path(save_dir, paste0("QC_", cond, ".png")),
-          plot = composed, width = 12, height = 7
+          plot = save_plot, width = 12, height = 8
         )
       }
 
