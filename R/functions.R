@@ -19,157 +19,179 @@ extract_marker_names <- function(id, markers){
   return(extrc_markers)
 }
 
-#' Plot QC statistics across markers, conditions, and replicates
-#'
-#' Generates boxplots with overlaid jittered points for QC metrics across markers
-#' and experimental conditions. Can return either a static multi-panel figure
-#' composed with \pkg{patchwork} or an interactive \pkg{plotly} subplot grid.
-#'
-#' @param data A data frame containing QC statistics. Must include a \code{marker}
-#'   column and (for full functionality) \code{replicate}. If \code{condition} is
-#'   missing, all rows are treated as a single condition. All numeric columns are
-#'   treated as candidate QC statistics unless \code{stats} is provided.
-#'
-#' @param condition Character vector specifying which conditions to plot.
-#'   \itemize{
-#'     \item \code{NULL}: plot all available conditions as-is (default)
-#'     \item \code{"All"}: collapse all rows into a single condition named \code{"All"}
-#'     \item otherwise: one or more condition names to subset
-#'   }
-#'
-#' @param stats Character vector of numeric column names to plot. If \code{NULL}
-#'   (default), all numeric columns in \code{data} are used.
-#'
-#' @param marker_levels Optional character vector defining the order of markers
-#'   on the x-axis. If \code{NULL} (default), uses the order found in
-#'   \code{data$marker}.
-#'
-#' @param legend_position Character string indicating where to place the legend.
-#'   For \code{engine = "ggplot"}, this is passed to
-#'   \code{theme(legend.position = ...)} (e.g. \code{"bottom"}, \code{"right"}).
-#'   For \code{engine = "plotly"}, \code{"bottom"} produces a horizontal legend,
-#'   otherwise a vertical legend is used.
-#'
-#' @param save_plots Logical; if \code{TRUE} and \code{engine = "ggplot"}, saves
-#'   each composed condition-level figure as a PNG file. Saving interactive
-#'   plotly output is not handled by this function.
-#'
-#' @param save_dir Character path to directory where plots will be saved.
-#'   Required only if \code{save_plots = TRUE} and \code{engine = "ggplot"}.
-#'
-#' @param ncol Integer; number of columns used when composing plots per condition.
-#'   Used to determine which panels are on the bottom row (to show x-axis labels
-#'   only there) and should match the layout used by \code{patchwork::wrap_plots()}
-#'   or the \code{plotly::subplot()} grid.
-#'
-#' @param sample_labeling Character; column in \code{data} used to color points.
-#'   One of \code{"map_id"}, \code{"sample_id_rep"}, \code{"sample_id"},
-#'   or \code{"replicate"}. Default: \code{"map_id"}.
-#'
-#' @param engine Character; output engine. One of \code{"ggplot"} or \code{"plotly"}.
-#'   \itemize{
-#'     \item \code{"ggplot"}: returns a static multi-panel patchwork/ggplot object
-#'       with collected guides (single legend) and x-axis labels shown only on the
-#'       bottom row.
-#'     \item \code{"plotly"}: returns an interactive plotly subplot grid created
-#'       via \code{plotly::ggplotly()} + \code{plotly::subplot()}. The legend is
-#'       displayed only once (first panel) to avoid duplicated entries.
-#'   }
-#'
-#' @return If \code{condition} resolves to a single condition, returns a single
-#'   object:
-#'   \itemize{
-#'     \item for \code{engine = "ggplot"}: a patchwork/ggplot object
-#'     \item for \code{engine = "plotly"}: a plotly htmlwidget
-#'   }
-#'   If multiple conditions are requested, returns a named list of such objects,
-#'   one per condition (names correspond to condition values).
-#'
-#' @details
-#' Each panel consists of:
-#' \itemize{
-#'   \item boxplots grouped by marker (outliers hidden),
-#'   \item jittered points showing individual replicates,
-#'   \item fill mapped to marker and color mapped to replicate.
-#' }
-#' For multi-panel figures, x-axis tick labels are hidden for all panels except
-#' those in the bottom row (computed from \code{ncol}).
-#' The \code{condition} argument is primarily a subsetting selector; use
-#' \code{"All"} only when you explicitly want to collapse across conditions.
-#'
-#' @examples
-#' \dontrun{
-#' # Static (publication-style) figure with one legend at the bottom
-#' p <- plot_qc_stats(
-#'   data = qc_df,
-#'   condition = "Ctrl",
-#'   stats = c("final_mapped", "library_size"),
-#'   marker_levels = c("INPUT", "H3K4me3", "H3K9me3", "H3K9ac", "5mC", "CXXC"),
-#'   engine = "ggplot",
-#'   legend_position = "bottom",
-#'   ncol = 3
-#' )
-#' p
-#'
-#' # Interactive plotly grid (legend shown once)
-#' fig <- plot_qc_stats(
-#'   data = qc_df,
-#'   condition = "Ctrl",
-#'   engine = "plotly",
-#'   legend_position = "bottom",
-#'   sample_labeling = "map_id",
-#'   ncol = 3
-#' )
-#' fig
-#'
-#' # EPK-centered QC plotting
-#' qc_plots <- plot_qc_stats(
-#'   epk$tables$stats_summary,
-#'   legend_position = "none",
-#'   save_plots = TRUE,
-#'   save_dir = results_qc,
-#'   ncol = 3,
-#'   engine = "plotly",
-#'   sample_labeling = "map_id"
-#' )
-#'
-#' # Batch-aware workflow (derive metadata outside plot_qc_stats)
-#' stats_summary <- stats_summary %>%
-#'   dplyr::mutate(
-#'     create_metadata_df(map_id_vector = stats_summary$map_id, bw_files = NULL)[,
-#'       c("marker", "batch", "sample_id", "replicate")
-#'     ],
-#'     sample_id_rep = paste0(sample_id, "_", replicate),
-#'     sample_id_rep_batch = paste0(sample_id_rep, "_", batch)
-#'   )
-#'
-#' qc_plots_A1 <- plot_qc_stats(
-#'   stats_summary %>% dplyr::select(-msr) %>% dplyr::filter(batch == "A1"),
-#'   legend_position = "none",
-#'   save_plots = TRUE,
-#'   save_dir = results_qc,
-#'   ncol = 3,
-#'   engine = "plotly",
-#'   sample_labeling = "sample_id_rep_batch"
-#' )
-#' }
-#'
-#' @importFrom ggplot2 ggplot geom_boxplot geom_point theme_bw labs guides theme
-#' @importFrom ggplot2 element_text element_blank element_line position_jitter ggsave
-#' @importFrom dplyr filter select
-#' @importFrom tidyselect where
-#' @export
+##' Plot QC statistics across markers, conditions, and replicates
+##'
+##' Generates boxplots with overlaid jittered points for QC metrics across markers
+##' and experimental conditions. Can return either a static multi-panel figure
+##' composed with \pkg{patchwork} or an interactive \pkg{plotly} subplot grid.
+##'
+##' @param data Backward-compatible alias for \code{stats_summary}. A data frame
+##'   containing QC statistics.
+##'
+##' @param epk Optional EPK object. If supplied,\code{epk$tables$stats_summary}
+##'   is used as plotting input.
+##'
+##' @param stats_summary Optional data frame containing QC statistics. If
+##'   provided, it takes precedence over \code{epk} and \code{data}.
+##'   Must include a \code{marker} column and (for full functionality)
+##'   \code{replicate}. If \code{condition} is missing, all rows are treated
+##'   as a single condition. All numeric columns are treated as candidate QC
+##'   statistics unless \code{stats} is provided.
+##'
+##' @param condition Character vector specifying which conditions to plot.
+##'   \itemize{
+##'     \item \code{NULL}: plot all available conditions as-is (default)
+##'     \item \code{"All"}: collapse all rows into a single condition named \code{"All"}
+##'     \item otherwise: one or more condition names to subset
+##'   }
+##'
+##' @param stats Character vector of numeric column names to plot. If \code{NULL}
+##'   (default), all numeric columns in \code{data} are used.
+##'
+##' @param stats_exclude Optional character vector of numeric column names to
+##'   exclude from plotting. Applied after \code{stats} selection. Useful when
+##'   \code{stats = NULL} but a few numeric columns should be omitted.
+##'
+##' @param marker_levels Optional character vector defining the order of markers
+##'   on the x-axis. If \code{NULL} (default), uses the order found in
+##'   \code{data$marker}.
+##'
+##' @param legend_position Character string indicating where to place the legend.
+##'   For \code{engine = "ggplot"}, this is passed to
+##'   \code{theme(legend.position = ...)} (e.g. \code{"bottom"}, \code{"right"}).
+##'   For \code{engine = "plotly"}, \code{"bottom"} produces a horizontal legend,
+##'   otherwise a vertical legend is used.
+##'
+##' @param save_plots Logical; if \code{TRUE} and \code{engine = "ggplot"}, saves
+##'   each composed condition-level figure as a PNG file. Saving interactive
+##'   plotly output is not handled by this function.
+##'
+##' @param save_dir Character path to directory where plots will be saved.
+##'   Required only if \code{save_plots = TRUE} and \code{engine = "ggplot"}.
+##'
+##' @param ncol Integer; number of columns used when composing plots per condition.
+##'   Used to determine which panels are on the bottom row (to show x-axis labels
+##'   only there) and should match the layout used by \code{patchwork::wrap_plots()}
+##'   or the \code{plotly::subplot()} grid.
+##'
+##' @param sample_labeling Character; column in \code{data} used to color points.
+##'   One of \code{"map_id"}, \code{"sample_id_rep"}, \code{"sample_id"},
+##'   or \code{"replicate"}. Default: \code{"map_id"}.
+##'
+##' @param engine Character; output engine. One of \code{"ggplot"} or \code{"plotly"}.
+##'   \itemize{
+##'     \item \code{"ggplot"}: returns a static multi-panel patchwork/ggplot object
+##'       with collected guides (single legend) and x-axis labels shown only on the
+##'       bottom row.
+##'     \item \code{"plotly"}: returns an interactive plotly subplot grid created
+##'       via \code{plotly::ggplotly()} + \code{plotly::subplot()}. The legend is
+##'       displayed only once (first panel) to avoid duplicated entries.
+##'   }
+##'
+##' @return If \code{condition} resolves to a single condition, returns a single
+##'   object:
+##'   \itemize{
+##'     \item for \code{engine = "ggplot"}: a patchwork/ggplot object
+##'     \item for \code{engine = "plotly"}: a plotly htmlwidget
+##'   }
+##'   If multiple conditions are requested, returns a named list of such objects,
+##'   one per condition (names correspond to condition values).
+##'
+##' @details
+##' Each panel consists of:
+##' \itemize{
+##'   \item boxplots grouped by marker (outliers hidden),
+##'   \item jittered points showing individual replicates,
+##'   \item fill mapped to marker and color mapped to replicate.
+##' }
+##' For multi-panel figures, x-axis tick labels are hidden for all panels except
+##' those in the bottom row (computed from \code{ncol}).
+##' The \code{condition} argument is primarily a subsetting selector; use
+##' \code{"All"} only when you explicitly want to collapse across conditions.
+##'
+##' @examples
+##' \dontrun{
+##' # Static (publication-style) figure with one legend at the bottom
+##' p <- plot_qc_stats(
+##'   data = qc_df,
+##'   condition = "Ctrl",
+##'   stats = c("final_mapped", "library_size"),
+##'   marker_levels = c("INPUT", "H3K4me3", "H3K9me3", "H3K9ac", "5mC", "CXXC"),
+##'   engine = "ggplot",
+##'   legend_position = "bottom",
+##'   ncol = 3
+##' )
+##' p
+##'
+##' # Interactive plotly grid (legend shown once)
+##' fig <- plot_qc_stats(
+##'   data = qc_df,
+##'   condition = "Ctrl",
+##'   engine = "plotly",
+##'   legend_position = "bottom",
+##'   sample_labeling = "map_id",
+##'   ncol = 3
+##' )
+##' fig
+##'
+##' # EPK-centered QC plotting
+##' qc_plots <- plot_qc_stats(
+##'   epk = epk,
+##'   legend_position = "none",
+##'   save_plots = TRUE,
+##'   save_dir = results_qc,
+##'   ncol = 3,
+##'   engine = "plotly",
+##'   sample_labeling = "map_id"
+##' )
+##'
+##' # Direct stats_summary input
+##' qc_plots_tbl <- plot_qc_stats(
+##'   stats_summary = qc_df,
+##'   engine = "ggplot",
+##'   ncol = 3
+##' )
+##'
+##' # Batch-aware workflow (derive metadata outside plot_qc_stats)
+##' stats_summary <- stats_summary %>%
+##'   dplyr::mutate(
+##'     create_metadata_df(map_id_vector = stats_summary$map_id, bw_files = NULL)[,
+##'       c("marker", "batch", "sample_id", "replicate")
+##'     ],
+##'     sample_id_rep = paste0(sample_id, "_", replicate),
+##'     sample_id_rep_batch = paste0(sample_id_rep, "_", batch)
+##'   )
+##'
+##' qc_plots_A1 <- plot_qc_stats(
+##'   stats_summary %>% dplyr::select(-msr) %>% dplyr::filter(batch == "A1"),
+##'   legend_position = "none",
+##'   save_plots = TRUE,
+##'   save_dir = results_qc,
+##'   ncol = 3,
+##'   engine = "plotly",
+##'   sample_labeling = "sample_id_rep_batch"
+##' )
+##' }
+##'
+##' @importFrom ggplot2 ggplot geom_boxplot geom_point theme_bw labs guides theme
+##' @importFrom ggplot2 element_text element_blank element_line position_jitter ggsave
+##' @importFrom dplyr filter select
+##' @importFrom tidyselect where
+##' @export
 plot_qc_stats <- function(
-    data,
-    condition = NULL,
-    stats = NULL,
-    marker_levels = NULL,
-    legend_position = c("bottom","right","left","top","none"),
-    save_plots = FALSE,
-    save_dir = "",
-    ncol = 3,
-    sample_labeling = c("map_id", "sample_id_rep", "sample_id", "replicate"),
-    engine = c("ggplot", "plotly")
+  data = NULL,
+  epk = NULL,
+  stats_summary = NULL,
+  condition = NULL,
+  stats = NULL,
+  stats_exclude = NULL,
+  marker_levels = NULL,
+  legend_position = c("bottom","right","left","top","none"),
+  save_plots = FALSE,
+  save_dir = "",
+  ncol = 3,
+  sample_labeling = c("map_id", "sample_id_rep", "sample_id", "replicate"),
+  engine = c("ggplot", "plotly")
 ){
 
   # Setup arguments
@@ -177,7 +199,6 @@ plot_qc_stats <- function(
   legend_position <- match.arg(legend_position)
   sample_labeling <- match.arg(sample_labeling)
   show_legend <- legend_position != "none"
-  should_save_plots <- isTRUE(save_plots) && engine == "ggplot"
 
 
   if (save_plots && engine == "plotly") {
@@ -186,7 +207,7 @@ plot_qc_stats <- function(
 
   out <- list()
 
-  if (should_save_plots && save_dir == "") {
+  if (save_plots && save_dir == "") {
     stop("Please provide a directory to save the plots.")
   }
 
@@ -262,7 +283,7 @@ plot_qc_stats <- function(
 
       out[[cond]] <- composed
 
-      if (should_save_plots) {
+      if (save_plots) {
         ggplot2::ggsave(
           filename = file.path(save_dir, paste0("QC_", cond, ".png")),
           plot = composed, width = 12, height = 7
