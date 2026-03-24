@@ -64,11 +64,7 @@
 run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
                                  output_dir, chromHmm_path, chromHMM_annotation,
                                  product) {
-  library(GenomicRanges)
-  library(wigglescout)
-  library(ggplot2)
-  library(dplyr)
-  library(stringr)
+  # Dependencies are imported via NAMESPACE; do not call library() in package code
 
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -259,11 +255,7 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
 run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
                                     output_dir, chromHmm_path, chromHMM_annotation,
                                     product) {
-  library(GenomicRanges)
-  library(wigglescout)
-  library(ggplot2)
-  library(dplyr)
-  library(stringr)
+  # Dependencies are imported via NAMESPACE; do not call library() in package code
 
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
