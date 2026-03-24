@@ -52,6 +52,11 @@
 #'   \code{"all"}, \code{"pooled"}, or \code{"replicates"}. Default:
 #'   \code{"all"}.
 #'
+#' @param scaling_info_file Optional path to a scaling info file (for example,
+#'   \code{scalinginfo.txt}) containing at least \code{map_id} and \code{msr}
+#'   columns. If provided, this file is used in preference to auto-discovery
+#'   from \code{pipeline_output_path}. Default: \code{NULL}.
+#'
 #' @return An \code{EPK} object (S3 class) with slots:
 #'   \itemize{
 #'     \item \code{mse}: \code{MultiAssayExperiment} with one \code{SummarizedExperiment} per experiment
@@ -85,6 +90,13 @@
 #' \strong{BigWig filtering:}
 #' Use \code{bigwig_scale} and \code{replicate_mode} to subset discovered/input
 #' BigWig files before validation and signal extraction.
+#'
+#' \strong{Scaling info integration (path mode):}
+#' When \code{pipeline_output_path} is provided, \code{create_epk()} attempts to
+#' read \code{scalinginfo.txt} (or \code{scaling_info.txt}) from common
+#' \code{reports/} locations and append \code{msr} to
+#' \code{epk$tables$stats_summary} by \code{map_id} when available. If
+#' \code{scaling_info_file} is provided, that file is used instead.
 #'
 #' @examples
 #' \dontrun{
@@ -153,7 +165,8 @@ create_epk <- function(
   experiment_names = NULL,
   sample_metadata = NULL,
   bigwig_scale = c("unscaled", "scaled", "both"),
-  replicate_mode = c("all", "pooled", "replicates")
+  replicate_mode = c("all", "pooled", "replicates"),
+  scaling_info_file = NULL
 ) {
 
   # ---------- local helpers ----------
@@ -164,6 +177,34 @@ create_epk <- function(
       out <- .extract_marker_metadata(bw_files)
       out$bw_file <- bw_base
       out <- out[, c("bw_file", "marker", "sample_id", "replicate"), drop = FALSE]
+
+      bad <- is.na(out$marker) | out$marker == "" |
+        is.na(out$sample_id) | out$sample_id == "" |
+        is.na(out$replicate) | out$replicate == ""
+
+      if (any(bad)) {
+        bad_files <- out$bw_file[bad]
+        template <- data.frame(
+          bw_file = head(bw_base, min(6, length(bw_base))),
+          marker = "<marker>",
+          sample_id = "<sample_id>",
+          replicate = "<replicate: rep1/rep2/pooled>",
+          stringsAsFactors = FALSE
+        )
+
+        message("Could not reliably parse marker/sample_id/replicate from some BigWig filenames.")
+        message("Examples of problematic files:")
+        message("  ", paste(head(bad_files, 10), collapse = "\n  "))
+        message("Please provide 'sample_metadata' with columns: marker, sample_id, replicate (optional: bw_file).")
+        message("Example template:")
+        print(template)
+
+        stop(
+          "Automatic metadata extraction failed for one or more BigWig files. ",
+          "Provide 'sample_metadata' explicitly."
+        )
+      }
+
       return(out)
     }
 
@@ -458,6 +499,12 @@ create_epk <- function(
     if ("frac_mapq_filtered" %in% names(stats_summary)) {
       stats_summary$frac_mapq_filtered <- NULL
     }
+
+    stats_summary <- .attach_msr_from_scaling_info(
+      stats_summary = stats_summary,
+      pipeline_output_path = pipeline_output_path,
+      scaling_info_file = scaling_info_file
+    )
   }
 
   # Determine unique markers to process
@@ -634,6 +681,74 @@ create_epk <- function(
   return(NULL)
 }
 
+#' Discover and attach msr from scalinginfo file
+#' @keywords internal
+.attach_msr_from_scaling_info <- function(stats_summary, pipeline_output_path, scaling_info_file = NULL) {
+  if (is.null(stats_summary)) {
+    return(stats_summary)
+  }
+
+  if (!is.null(scaling_info_file)) {
+    if (!is.character(scaling_info_file) || length(scaling_info_file) != 1) {
+      stop("'scaling_info_file' must be a single file path string.")
+    }
+    if (!file.exists(scaling_info_file)) {
+      message("No scaling info file found at '", scaling_info_file, "'. Continuing without msr.")
+      return(stats_summary)
+    }
+    scaling_file <- scaling_info_file
+  } else {
+    if (is.null(pipeline_output_path)) {
+      return(stats_summary)
+    }
+
+    candidates <- c(
+      file.path(pipeline_output_path, "minute_output", "reports", "scalinginfo.txt"),
+      file.path(pipeline_output_path, "reports", "scalinginfo.txt"),
+      file.path(pipeline_output_path, "minute_output", "reports", "scaling_info.txt"),
+      file.path(pipeline_output_path, "reports", "scaling_info.txt")
+    )
+
+    scaling_file <- candidates[file.exists(candidates)][1]
+    if (is.na(scaling_file) || length(scaling_file) == 0) {
+      message("No scaling info file found in pipeline reports directories. Continuing without msr.")
+      return(stats_summary)
+    }
+  }
+
+  scaling_info <- tryCatch(
+    utils::read.csv(
+      scaling_file,
+      sep = "\t",
+      header = TRUE,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    ),
+    error = function(e) {
+      warning("Could not read scaling info file: ", scaling_file, " (", conditionMessage(e), ").")
+      return(NULL)
+    }
+  )
+
+  if (is.null(scaling_info)) {
+    return(stats_summary)
+  }
+
+  if (!"map_id" %in% names(scaling_info) && ncol(scaling_info) >= 1) {
+    names(scaling_info)[1] <- "map_id"
+  }
+
+  if (!all(c("map_id", "msr") %in% names(scaling_info))) {
+    warning("Scaling info found but missing required columns 'map_id' and/or 'msr': ", scaling_file)
+    return(stats_summary)
+  }
+
+  ord <- match(stats_summary$map_id, scaling_info$map_id)
+  stats_summary$msr <- scaling_info$msr[ord]
+
+  stats_summary
+}
+
 #' Validate that BigWig files match stats_summary$map_id
 #' @keywords internal
 .validate_bw_files_in_stats_summary <- function(bw_files, stats_summary) {
@@ -764,6 +879,23 @@ create_epk <- function(
 
   for (i in seq_along(bw_files)) {
     filename <- basename(bw_files[i])
+
+    # Primary parser for minute-style naming:
+    # <project>_<batch>_<marker>_<rerun>_<sample_id>_<replicate>.<genome>.<scaled|unscaled>.bw
+    m <- regexec(
+      "^([^_]+)_([^_]+)_([^_]+)_([^_]+)_(.+)_(pooled|rep[0-9]+)\\.[^.]+\\.(scaled|unscaled)\\.bw$",
+      filename,
+      ignore.case = TRUE,
+      perl = TRUE
+    )
+    g <- regmatches(filename, m)[[1]]
+
+    if (length(g) > 0) {
+      metadata$marker[i] <- g[4]
+      metadata$sample_id[i] <- g[6]
+      metadata$replicate[i] <- tolower(g[7])
+      next
+    }
 
     # Extract marker
     for (marker in known_markers) {

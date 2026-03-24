@@ -6,6 +6,8 @@
 \alias{EpigenicR-package}
 \title{EpigenicR: Tools for Epigenomic Data Analysis and Visualization}
 \description{
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
 Provides tools for processing, analyzing, and visualizing epigenomic data from ChIP-seq, methylation, and chromatin state experiments. Includes functions for quality control, metadata management, annotation retrieval, and creating comprehensive EPK (Epigenomic Package) objects for downstream analysis.
 }
 \seealso{

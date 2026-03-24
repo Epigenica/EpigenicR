@@ -18,6 +18,10 @@ A character vector containing the extracted marker names.
 Extract marker names from sample IDs
 }
 \examples{
+# Compute and add sample correlations for all experiments
+epk <- compute_sample_cor(epk, method = "pearson", transform = "none")
+# Access correlations:
+# epk$derived$sample_cor
 id <- "Sample1_H3K4me3_Rep1"
 markers <- c("INPUT","H3K4me3","H3K9me3","H3K9ac","5mC","CXXC")
 extract_marker_names(id, markers)
