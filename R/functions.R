@@ -1440,18 +1440,13 @@ print.EPK <- function(x, ...) {
   invisible(x)
 }
 
-#' Compute sample–sample correlation for one marker
+
+#' Compute sample–sample correlations for all experiments in an EPK object
 #'
-#' Computes a correlation matrix between samples for a single assay
-#' (i.e. one marker) stored in a \code{SummarizedExperiment}.
-#'
-#' @param se A \code{SummarizedExperiment}.
-#' @param assay_name Name of the assay (marker).
-#' @param method Correlation method. One of \code{"pearson"} or \code{"spearman"}.
+#' @param epk An EPK object (S3 list with an `mse` slot).
+#' @param method Correlation method. One of "pearson" or "spearman".
 #' @param transform Optional transformation applied before correlation.
-#'   One of \code{"none"} or \code{"log1p"}.
-#'
-#' @return A numeric matrix (samples × samples) of correlations.
+#' @return The EPK object with a new slot epk$derived$sample_cor containing the correlations.
 #' @export
 compute_sample_cor <- function(epk, method = "pearson", transform = c("none", "log1p")) {
   transform <- match.arg(transform)
@@ -1474,6 +1469,8 @@ compute_sample_cor <- function(epk, method = "pearson", transform = c("none", "l
   epk$derived <- c(epk$derived, list(sample_cor = sample_cor_list))
   epk
 }
+
+
 
 #' Compute sample–sample correlations for all assays in a specified experiment of an EPK object
 #'
