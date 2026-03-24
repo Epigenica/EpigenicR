@@ -2,7 +2,7 @@
 % Please edit documentation in R/functions.R
 \name{compute_sample_cor}
 \alias{compute_sample_cor}
-\title{Compute sample–sample correlation for one marker}
+\title{Compute sample–sample correlations for all experiments in an EPK object}
 \usage{
 compute_sample_cor(epk, method = "pearson", transform = c("none", "log1p"))
 }
@@ -12,17 +12,10 @@ compute_sample_cor(epk, method = "pearson", transform = c("none", "log1p"))
 \item{method}{Correlation method. One of "pearson" or "spearman".}
 
 \item{transform}{Optional transformation applied before correlation.}
-
-\item{se}{A \code{SummarizedExperiment}.}
-
-\item{assay_name}{Name of the assay (marker).}
 }
 \value{
-A numeric matrix (samples × samples) of correlations.
-
 The EPK object with a new slot epk$derived$sample_cor containing the correlations.
 }
 \description{
-Computes a correlation matrix between samples for a single assay
-(i.e. one marker) stored in a \code{SummarizedExperiment}.
+Compute sample–sample correlations for all experiments in an EPK object
 }

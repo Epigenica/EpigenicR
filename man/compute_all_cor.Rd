@@ -2,7 +2,7 @@
 % Please edit documentation in R/functions.R
 \name{compute_all_cor}
 \alias{compute_all_cor}
-\title{Compute sample–sample correlations for all markers}
+\title{Compute sample–sample correlations for all assays in a specified experiment of an EPK object}
 \usage{
 compute_all_cor(
   epk,
@@ -19,18 +19,12 @@ compute_all_cor(
 \item{method}{Correlation method. One of "pearson" or "spearman".}
 
 \item{transform}{Optional transformation applied before correlation.}
-
-\item{mse}{A \code{MultiAssayExperiment}.}
 }
 \value{
-A named list of correlation matrices, one per marker.
-
 The EPK object with a new slot epk$derived$all_cor containing the correlations for the specified experiment.
-## Example usage:
 }
 \description{
-Computes sample–sample correlation matrices for all assays (markers)
-within one experiment of a \code{MultiAssayExperiment}.
+Compute sample–sample correlations for all assays in a specified experiment of an EPK object
 }
 \examples{
 # Compute and add all correlations for a specific experiment

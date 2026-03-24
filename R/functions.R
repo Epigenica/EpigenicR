@@ -1479,7 +1479,6 @@ compute_sample_cor <- function(epk, method = "pearson", transform = c("none", "l
 #' @param method Correlation method. One of "pearson" or "spearman".
 #' @param transform Optional transformation applied before correlation.
 #' @return The EPK object with a new slot epk$derived$all_cor containing the correlations for the specified experiment.
-#' ## Example usage:
 #' @examples
 #' # Compute and add all correlations for a specific experiment
 #' epk <- compute_all_cor(epk, exp_name = "genes", method = "pearson", transform = "none")
