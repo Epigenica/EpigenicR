@@ -803,3 +803,47 @@ compute_all_cor <- function(mse, exp_name,
     assay_names
   )
 }
+
+#' Resolve QC input to a stats_summary-like data frame
+#' @keywords internal
+.resolve_stats_summary_input <- function(data = NULL, epk = NULL, stats_summary = NULL, fn_name = "plot_qc_stats") {
+  provided <- c(
+    data = !is.null(data),
+    epk = !is.null(epk),
+    stats_summary = !is.null(stats_summary)
+  )
+
+  if (!any(provided)) {
+    stop("Provide one of 'stats_summary', 'epk', or 'data' to ", fn_name, "().")
+  }
+
+  if (sum(provided) > 1) {
+    warning(
+      "Multiple input sources provided (",
+      paste(names(provided)[provided], collapse = ", "),
+      "). Using priority: stats_summary > data > epk."
+    )
+  }
+
+  if (!is.null(stats_summary)) {
+    data_in <- stats_summary
+  } else if (!is.null(data)) {
+    data_in <- data
+  } else {
+    if (!is.list(epk) || is.null(epk$tables) || is.null(epk$tables$stats_summary)) {
+      stop("'epk' must contain epk$tables$stats_summary.")
+    }
+    data_in <- epk$tables$stats_summary
+  }
+
+  if (!is.data.frame(data_in)) {
+    data_in <- tryCatch(
+      as.data.frame(data_in, stringsAsFactors = FALSE),
+      error = function(e) {
+        stop("Resolved stats summary input is not a data frame and cannot be coerced.")
+      }
+    )
+  }
+
+  data_in
+}
