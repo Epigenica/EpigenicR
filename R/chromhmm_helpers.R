@@ -264,49 +264,55 @@ run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
 
   allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
 
-  if (length(unique(bw_df_subset$batch)) > 1) {
-    allfiles_name <- paste0(
-      bw_df_subset$marker, "_", bw_df_subset$sample_id,
-      "_", bw_df_subset$replicate, "_", bw_df_subset$batch
-    )
+  if (length(allfiles) == 0) {
+    message(sprintf(
+      "[chromHMM:%s] no pooled bigWig files found - skipping enrichment profile.", mk
+    ))
   } else {
-    allfiles_name <- paste0(
-      bw_df_subset$marker, "_", bw_df_subset$sample_id,
-      "_", bw_df_subset$replicate
+    if (length(unique(bw_df_subset$batch)) > 1) {
+      allfiles_name <- paste0(
+        bw_df_subset$marker, "_", bw_df_subset$sample_id,
+        "_", bw_df_subset$replicate, "_", bw_df_subset$batch
+      )
+    } else {
+      allfiles_name <- paste0(
+        bw_df_subset$marker, "_", bw_df_subset$sample_id,
+        "_", bw_df_subset$replicate
+      )
+    }
+
+    p_enrich <- wigglescout::plot_bw_profile(
+      allfiles,
+      loci = loci,
+      mode = "center",
+      labels = allfiles_name
+    )
+
+    p_enrich <- p_enrich +
+      ggplot2::theme_bw(base_size = 16) +
+      ggplot2::labs(x = paste0(mk, " CpG islands (", length(loci), ") loci")) +
+      ggplot2::guides(color = ggplot2::guide_legend(ncol = 1, byrow = TRUE)) +
+      ggplot2::theme(
+        legend.position = "right",
+        legend.title = ggplot2::element_blank()
+      )
+
+    ggplot2::ggsave(
+      file.path(output_dir, paste0(mk, "_profile_center.png")),
+      plot = p_enrich,
+      width = 12,
+      height = 8
+    )
+
+    write.table(
+      p_enrich$data,
+      file.path(output_dir, paste0(mk, "_profile_center_data.csv")),
+      row.names = FALSE,
+      quote = FALSE,
+      col.names = TRUE,
+      sep = ","
     )
   }
-
-  p_enrich <- wigglescout::plot_bw_profile(
-    allfiles,
-    loci = loci,
-    mode = "center",
-    labels = allfiles_name
-  )
-
-  p_enrich <- p_enrich +
-    ggplot2::theme_bw(base_size = 16) +
-    ggplot2::labs(x = paste0(mk, " CpG islands (", length(loci), ") loci")) +
-    ggplot2::guides(color = ggplot2::guide_legend(ncol = 1, byrow = TRUE)) +
-    ggplot2::theme(
-      legend.position = "right",
-      legend.title = ggplot2::element_blank()
-    )
-
-  ggplot2::ggsave(
-    file.path(output_dir, paste0(mk, "_profile_center.png")),
-    plot = p_enrich,
-    width = 12,
-    height = 8
-  )
-
-  write.table(
-    p_enrich$data,
-    file.path(output_dir, paste0(mk, "_profile_center_data.csv")),
-    row.names = FALSE,
-    quote = FALSE,
-    col.names = TRUE,
-    sep = ","
-  )
 
   # --- chromHMM boxplot ---
   scaling_type <- if (product != "cNUC") "scaled" else "unscaled"
