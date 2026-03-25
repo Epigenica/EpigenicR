@@ -2,21 +2,21 @@
 % Please edit documentation in R/chromhmm_helpers.R
 \name{run_chromhmm_enrichment}
 \alias{run_chromhmm_enrichment}
-\title{Run ChromHMM enrichment for all markers and store results in EPK}
+\title{Run ChromHMM enrichment for all markers against a set of loci}
 \usage{
 run_chromhmm_enrichment(
   epk,
   bw_df,
   bigwig_dir,
-  loci_protein_coding,
-  loci_cpg_islands,
+  loci,
   output_dir,
   chromHmm_path,
   chromHMM_annotation,
   product,
   run_mode = c("parallel", "sequential"),
   n_workers = 0L,
-  markers_exclude = c("INPUT", "5mC", "CXXC")
+  markers_exclude = c("INPUT"),
+  methylation_markers = c("5mC", "CXXC")
 )
 }
 \arguments{
@@ -26,15 +26,12 @@ run_chromhmm_enrichment(
 
 \item{bigwig_dir}{Character; directory containing BigWig files.}
 
-\item{loci_protein_coding}{\code{GRanges}; loci for histone enrichment
-(typically protein-coding TSS regions).}
+\item{loci}{\code{GRanges}; genomic features to use for enrichment
+(e.g. protein-coding TSS regions, CpG islands, VISTA enhancers).}
 
-\item{loci_cpg_islands}{\code{GRanges}; loci for methylation enrichment
-(typically CpG island regions).}
-
-\item{output_dir}{Character; base output directory. Sub-directories
-\code{protein_coding/<marker>/} and \code{CpG_islands/5mC/} are
-created automatically.}
+\item{output_dir}{Character; output directory for this loci set.
+Sub-directories \code{<marker>/} are created automatically. The
+basename is used as the key in \code{epk$enrichment_results}.}
 
 \item{chromHmm_path}{Character; path to ChromHMM annotation directory.}
 
@@ -50,24 +47,30 @@ marker at a time in a blocking subprocess.}
 \item{n_workers}{Integer; parallel worker count. \code{0L} (default)
 auto-detects as \code{min(n_markers, detectCores() - 1)}.}
 
-\item{markers_exclude}{Character vector of markers to skip for histone
-analysis. Defaults to \code{c("INPUT", "5mC", "CXXC")}.}
+\item{markers_exclude}{Character vector of markers to skip.
+Defaults to \code{"INPUT"}. \code{NA} values are always dropped.}
+
+\item{methylation_markers}{Character vector of marker names that should
+use \code{run_chromhmm_methylation_enrichment} (center-mode profile).
+All other markers use \code{run_chromhmm_histone_enrichment}
+(start-mode profile). Defaults to \code{c("5mC", "CXXC")}.}
 }
 \value{
-The input \code{epk} with two slots updated:
+The input \code{epk} with results appended:
   \itemize{
-    \item \code{epk$enrichment_results$chromatin_states} — named list
-      with \code{protein_coding} (one data frame per marker) and
-      \code{cpg_islands} (element \code{"5mC"}).
-    \item \code{epk$enrichment_results$enrichment_profile} — same
-      structure, holding profile data frames.
+    \item \code{epk$enrichment_results$chromatin_states[[loci_name]]}
+      — named list of chromatin state data frames, one per marker.
+    \item \code{epk$enrichment_results$enrichment_profile[[loci_name]]}
+      — named list of profile data frames, one per marker.
   }
+  where \code{loci_name = basename(output_dir)}.
 }
 \description{
-Orchestrates ChromHMM enrichment analysis for histone markers at
-protein-coding loci and methylation markers (5mC/CXXC) at CpG island
-loci. Results are written to disk, then loaded and stored in the EPK
-object under \code{epk$enrichment_results}.
+Runs ChromHMM enrichment analysis for all markers in \code{epk} against
+a single set of genomic \code{loci}. Call once per loci set (e.g. once
+for protein-coding genes, once for CpG islands). Results are written to
+\code{output_dir/<marker>/}, then loaded and stored in the EPK object
+keyed by \code{basename(output_dir)}.
 }
 \details{
 Sentinel-based skipping: a marker is skipped if its output directory
@@ -76,18 +79,22 @@ Delete \code{.done} to force re-computation.
 }
 \examples{
 \dontrun{
+# Run once per loci set
 epk <- run_chromhmm_enrichment(
-  epk                 = epk,
-  bw_df               = bw_df,
-  bigwig_dir          = bigwig_dir,
-  loci_protein_coding = genes_coord_protein_coding,
-  loci_cpg_islands    = cpg_islands_coord,
-  output_dir          = "results/Enrichment",
+  epk     = epk, bw_df = bw_df, bigwig_dir = bigwig_dir,
+  loci    = genes_coord_protein_coding,
+  output_dir          = "results/Enrichment/protein_coding",
   chromHmm_path       = "data/chromHmm_annotations",
   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-  product             = "cNUC",
-  run_mode            = "parallel",
-  n_workers           = 0L
+  product = "cNUC"
+)
+epk <- run_chromhmm_enrichment(
+  epk     = epk, bw_df = bw_df, bigwig_dir = bigwig_dir,
+  loci    = cpg_islands_coord,
+  output_dir          = "results/Enrichment/CpG_islands",
+  chromHmm_path       = "data/chromHmm_annotations",
+  chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+  product = "cNUC"
 )
 }
 
