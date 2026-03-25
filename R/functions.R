@@ -308,6 +308,18 @@ plot_qc_stats <- function(
     fn_name = "plot_qc_stats"
   )
 
+  # Drop rows with NA marker — these arise when BigWig files for a marker
+  # (e.g. INPUT) were excluded by scale filtering in create_epk, leaving
+  # stats_summary rows unmatched and their marker column as NA.
+  na_marker_n <- sum(is.na(data$marker))
+  if (na_marker_n > 0) {
+    message(sprintf(
+      "plot_qc_stats: dropping %d row(s) with NA marker (likely unmatched INPUT or excluded scale).",
+      na_marker_n
+    ))
+    data <- data[!is.na(data$marker), ]
+  }
+
   # Setup arguments
   engine <- match.arg(engine)
   legend_position <- match.arg(legend_position)
