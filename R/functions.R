@@ -338,7 +338,7 @@ plot_qc_stats <- function(
     stop("Please provide a directory to save the plots.")
   }
 
-  if (is.null(marker_levels)) marker_levels <- unique(data$marker)
+  if (is.null(marker_levels)) marker_levels <- unique(data$marker[!is.na(data$marker)])
   data$marker <- factor(data$marker, levels = marker_levels)
 
   if (!sample_labeling %in% names(data)) {
