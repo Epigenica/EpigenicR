@@ -22,12 +22,13 @@
 #' @importFrom tidyr pivot_wider
 #' @importFrom plotly plot_ly layout
 #' @export
-interactive_heatmap_chromhmm <- function(epk, marker, loci) {
+interactive_heatmap_chromhmm <- function(epk, marker, loci, show_pooled = FALSE) {
   if (is.null(epk$enrichment_results$chromatin_states[[loci]])) {
     stop(sprintf("No chromatin_states data found for loci '%s' in epk.", loci))
   }
 
   df_cs <- epk$enrichment_results$chromatin_states[[loci]][[marker]]
+  df_cs <- df_cs |> dplyr::filter(show_pooled | !grepl("pooled", sample_id_rep))
 
   if (is.null(df_cs)) {
     stop(sprintf(
