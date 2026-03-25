@@ -47,7 +47,8 @@ interactive_heatmap_chromhmm <- function(epk, marker, loci) {
     x = colnames(heat_mat),
     y = rownames(heat_mat),
     z = heat_mat,
-    type = "heatmap"
+    type = "heatmap",
+    hovertemplate = "Chromatin State: %{x}<br>Sample: %{y}<br>Mean RPGC: %{z}<extra></extra>"
   ) |>
     plotly::layout(
       title = paste0("Chromatin State Distribution - ", marker),
