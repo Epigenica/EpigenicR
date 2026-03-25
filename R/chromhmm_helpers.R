@@ -489,8 +489,7 @@ dispatch_chromhmm_jobs <- function(jobs, n_workers) {
           library(stringr,       quietly = TRUE)  # nolint: undesirable_function_linter
           do.call(fn, fn_args)
         },
-        args = list(fn = job$fn, fn_args = job$args),
-        stderr = NULL
+        args = list(fn = job$fn, fn_args = job$args)
       )
       running <- c(running, list(list(proc = proc, mk = job$mk)))
 
