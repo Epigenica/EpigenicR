@@ -609,7 +609,7 @@ run_chromhmm_enrichment <- function(
 
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-  # Expected sentinel + output files per marker
+  # Expected sentinel + output files per marker. For methylation markers, profile is "center"; for others, "start".
   .expected_files <- function(op, mk) {
     profile_file <- if (mk %in% methylation_markers) {
       paste0(mk, "_profile_center.png")
