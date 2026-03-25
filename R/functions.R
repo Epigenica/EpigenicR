@@ -308,16 +308,20 @@ plot_qc_stats <- function(
     fn_name = "plot_qc_stats"
   )
 
-  # Drop rows with NA marker — these arise when BigWig files for a marker
-  # (e.g. INPUT) were excluded by scale filtering in create_epk, leaving
-  # stats_summary rows unmatched and their marker column as NA.
-  na_marker_n <- sum(is.na(data$marker))
+  # Drop rows with NA or blank marker — these arise when BigWig files for a
+  # marker (e.g. INPUT) were excluded by scale filtering in create_epk, leaving
+  # stats_summary rows unmatched. Also catches the string "NA" that can appear
+  # after round-tripping through CSV.
+  bad_marker <- is.na(data$marker) |
+    (is.character(data$marker) & trimws(data$marker) %in% c("", "NA")) |
+    (is.factor(data$marker)    & trimws(as.character(data$marker)) %in% c("", "NA"))
+  na_marker_n <- sum(bad_marker)
   if (na_marker_n > 0) {
     message(sprintf(
-      "plot_qc_stats: dropping %d row(s) with NA marker (likely unmatched INPUT or excluded scale).",
+      "plot_qc_stats: dropping %d row(s) with NA/blank marker (likely unmatched INPUT or excluded scale).",
       na_marker_n
     ))
-    data <- data[!is.na(data$marker), ]
+    data <- data[!bad_marker, ]
   }
 
   # Setup arguments
