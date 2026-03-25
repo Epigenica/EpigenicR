@@ -37,13 +37,13 @@ run_chromhmm_histone_enrichment(
 others use scaled).}
 }
 \value{
-Invisibly returns \code{NULL}. Writes:
+Invisibly returns \code{NULL}. Writes to \code{output_dir}:
   \itemize{
     \item PNG: enrichment profile plot (\code{<marker>_profile_start.png})
     \item CSV: profile data (\code{<marker>_profile_start_data.csv})
     \item PNG: chromatin state distribution (\code{<marker>_chromatin_state_dist.png})
     \item CSV: chromatin state summary (\code{<marker>_chromatin_state_dist.csv})
-    \item Marker file: \code{.done} upon completion
+    \item Sentinel file: \code{.done} written on successful completion
   }
 }
 \description{

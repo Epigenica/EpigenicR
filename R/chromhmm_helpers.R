@@ -64,8 +64,6 @@
 run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
                                  output_dir, chromHmm_path, chromHMM_annotation,
                                  product) {
-  # Dependencies are imported via NAMESPACE; do not call library() in package code
-
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
   # --- enrichment profile ---
@@ -257,8 +255,6 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
 run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
                                     output_dir, chromHmm_path, chromHMM_annotation,
                                     product) {
-  # Dependencies are imported via NAMESPACE; do not call library() in package code
-
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
   # --- enrichment profile ---
@@ -474,7 +470,21 @@ dispatch_chromhmm_jobs <- function(jobs, n_workers) {
       job <- pending[[1]]
       pending[[1]] <- NULL
 
-      proc <- callr::r_bg(func = job$fn, args = job$args)
+      proc <- callr::r_bg(
+        func = function(fn, fn_args) {
+          # Attach packages in the clean subprocess so that furrr's package
+          # auto-detection can resolve S4 classes (e.g. Seqinfo -> GenomeInfoDb)
+          # without trying library("Seqinfo"), which is a class not a package.
+          library(GenomeInfoDb,  quietly = TRUE)  # nolint: undesirable_function_linter
+          library(GenomicRanges, quietly = TRUE)  # nolint: undesirable_function_linter
+          library(wigglescout,   quietly = TRUE)  # nolint: undesirable_function_linter
+          library(ggplot2,       quietly = TRUE)  # nolint: undesirable_function_linter
+          library(dplyr,         quietly = TRUE)  # nolint: undesirable_function_linter
+          library(stringr,       quietly = TRUE)  # nolint: undesirable_function_linter
+          do.call(fn, fn_args)
+        },
+        args = list(fn = job$fn, fn_args = job$args)
+      )
       running <- c(running, list(list(proc = proc, mk = job$mk)))
 
       message(sprintf(
@@ -493,4 +503,225 @@ dispatch_chromhmm_jobs <- function(jobs, n_workers) {
   }
 
   invisible(NULL)
+}
+
+#' Run ChromHMM enrichment for all markers and store results in EPK
+#'
+#' Orchestrates ChromHMM enrichment analysis for histone markers at
+#' protein-coding loci and methylation markers (5mC/CXXC) at CpG island
+#' loci. Results are written to disk, then loaded and stored in the EPK
+#' object under \code{epk$enrichment_results}.
+#'
+#' @param epk EPK object to update.
+#' @param bw_df Data frame of BigWig metadata (see \code{create_metadata_df}).
+#' @param bigwig_dir Character; directory containing BigWig files.
+#' @param loci_protein_coding \code{GRanges}; loci for histone enrichment
+#'   (typically protein-coding TSS regions).
+#' @param loci_cpg_islands \code{GRanges}; loci for methylation enrichment
+#'   (typically CpG island regions).
+#' @param output_dir Character; base output directory. Sub-directories
+#'   \code{protein_coding/<marker>/} and \code{CpG_islands/5mC/} are
+#'   created automatically.
+#' @param chromHmm_path Character; path to ChromHMM annotation directory.
+#' @param chromHMM_annotation Character; ChromHMM annotation filename.
+#' @param product Character; product type (\code{"cNUC"} or
+#'   \code{"GenomePro"}).
+#' @param run_mode Character; \code{"parallel"} (default) uses
+#'   \code{callr} background processes; \code{"sequential"} runs one
+#'   marker at a time in a blocking subprocess.
+#' @param n_workers Integer; parallel worker count. \code{0L} (default)
+#'   auto-detects as \code{min(n_markers, detectCores() - 1)}.
+#' @param markers_exclude Character vector of markers to skip for histone
+#'   analysis. Defaults to \code{c("INPUT", "5mC", "CXXC")}.
+#'
+#' @return The input \code{epk} with two slots updated:
+#'   \itemize{
+#'     \item \code{epk$enrichment_results$chromatin_states} — named list
+#'       with \code{protein_coding} (one data frame per marker) and
+#'       \code{cpg_islands} (element \code{"5mC"}).
+#'     \item \code{epk$enrichment_results$enrichment_profile} — same
+#'       structure, holding profile data frames.
+#'   }
+#'
+#' @details
+#' Sentinel-based skipping: a marker is skipped if its output directory
+#' already contains a \code{.done} file and all expected output files.
+#' Delete \code{.done} to force re-computation.
+#'
+#' @examples
+#' \dontrun{
+#' epk <- run_chromhmm_enrichment(
+#'   epk                 = epk,
+#'   bw_df               = bw_df,
+#'   bigwig_dir          = bigwig_dir,
+#'   loci_protein_coding = genes_coord_protein_coding,
+#'   loci_cpg_islands    = cpg_islands_coord,
+#'   output_dir          = "results/Enrichment",
+#'   chromHmm_path       = "data/chromHmm_annotations",
+#'   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+#'   product             = "cNUC",
+#'   run_mode            = "parallel",
+#'   n_workers           = 0L
+#' )
+#' }
+#'
+#' @export
+run_chromhmm_enrichment <- function(
+  epk,
+  bw_df,
+  bigwig_dir,
+  loci_protein_coding,
+  loci_cpg_islands,
+  output_dir,
+  chromHmm_path,
+  chromHMM_annotation,
+  product,
+  run_mode = c("parallel", "sequential"),
+  n_workers = 0L,
+  markers_exclude = c("INPUT", "5mC", "CXXC")
+) {
+  run_mode <- match.arg(run_mode)
+
+  # ── 1. Histone markers at protein-coding loci ──────────────────────────
+  histone_markers <- unique(epk$tables$stats_summary$marker)
+  histone_markers <- histone_markers[!histone_markers %in% markers_exclude]
+
+  output_dir_pc <- file.path(output_dir, "protein_coding")
+  dir.create(output_dir_pc, recursive = TRUE, showWarnings = FALSE)
+
+  .expected_histone <- function(op, mk) c(
+    file.path(op, paste0(mk, "_profile_start.png")),
+    file.path(op, paste0(mk, "_chromatin_state_dist.png")),
+    file.path(op, paste0(mk, "_chromatin_state_dist.csv"))
+  )
+
+  markers_needed <- Filter(function(mk) {
+    op <- file.path(output_dir_pc, mk)
+    !file.exists(file.path(op, ".done")) ||
+      !all(file.exists(.expected_histone(op, mk)))
+  }, histone_markers)
+
+  if (length(markers_needed) > 0) {
+    nw <- if (n_workers == 0L) {
+      max(1L, min(length(markers_needed), parallel::detectCores() - 1L))
+    } else {
+      as.integer(n_workers)
+    }
+
+    message(sprintf(
+      "[chromHMM] %d histone marker(s) to compute: %s",
+      length(markers_needed),
+      paste(markers_needed, collapse = ", ")
+    ))
+
+    common_args <- list(
+      bw_df               = bw_df,
+      bigwig_dir          = bigwig_dir,
+      loci                = loci_protein_coding,
+      chromHmm_path       = chromHmm_path,
+      chromHMM_annotation = chromHMM_annotation,
+      product             = product
+    )
+
+    jobs <- lapply(markers_needed, function(mk) {
+      op <- file.path(output_dir_pc, mk)
+      dir.create(op, recursive = TRUE, showWarnings = FALSE)
+      list(
+        fn   = run_chromhmm_histone_enrichment,
+        mk   = mk,
+        args = c(list(mk = mk, output_dir = op), common_args)
+      )
+    })
+
+    if (run_mode == "parallel") {
+      dispatch_chromhmm_jobs(jobs, n_workers = nw)
+    } else {
+      for (job in jobs) {
+        message(sprintf("[chromHMM] sequential: %s", job$mk))
+        callr::r(func = job$fn, args = job$args)
+      }
+    }
+  } else {
+    message("[chromHMM] all histone markers done, loading from cache.")
+  }
+
+  # ── 2. Methylation at CpG island loci (5mC) ────────────────────────────
+  output_dir_cpg <- file.path(output_dir, "CpG_islands", "5mC")
+  dir.create(output_dir_cpg, recursive = TRUE, showWarnings = FALSE)
+
+  .expected_methylation <- function(op) c(
+    file.path(op, "5mC_profile_center.png"),
+    file.path(op, "5mC_chromatin_state_dist.png"),
+    file.path(op, "5mC_chromatin_state_dist.csv")
+  )
+
+  if (!file.exists(file.path(output_dir_cpg, ".done")) ||
+      !all(file.exists(.expected_methylation(output_dir_cpg)))) {
+    message("[chromHMM] running methylation enrichment (5mC).")
+    callr::r(
+      func = run_chromhmm_methylation_enrichment,
+      args = list(
+        bw_df               = bw_df,
+        bigwig_dir          = bigwig_dir,
+        mk                  = "5mC",
+        loci                = loci_cpg_islands,
+        output_dir          = output_dir_cpg,
+        chromHmm_path       = chromHmm_path,
+        chromHMM_annotation = chromHMM_annotation,
+        product             = product
+      )
+    )
+  } else {
+    message("[chromHMM] methylation enrichment done, loading from cache.")
+  }
+
+  # ── 3. Load results from disk ───────────────────────────────────────────
+  files_state_pc <- list.files(
+    file.path(output_dir, "protein_coding"),
+    pattern = ".*_chromatin_state_dist\\.csv$",
+    full.names = TRUE, recursive = TRUE
+  )
+  files_state_cpg <- list.files(
+    file.path(output_dir, "CpG_islands"),
+    pattern = ".*_chromatin_state_dist\\.csv$",
+    full.names = TRUE, recursive = TRUE
+  )
+  files_profile_pc <- list.files(
+    file.path(output_dir, "protein_coding"),
+    pattern = ".*_profile_start_data\\.csv$",
+    full.names = TRUE, recursive = TRUE
+  )
+  files_profile_cpg <- list.files(
+    file.path(output_dir, "CpG_islands"),
+    pattern = ".*_profile_center_data\\.csv$",
+    full.names = TRUE, recursive = TRUE
+  )
+
+  .read_csvs <- function(files, nms) {
+    if (length(files) == 0) return(list())
+    setNames(
+      lapply(files, read.csv,
+             sep = ",", header = TRUE, stringsAsFactors = FALSE),
+      nms
+    )
+  }
+
+  enrichment_results <- list(
+    protein_coding = .read_csvs(
+      files_state_pc, basename(dirname(files_state_pc))
+    ),
+    cpg_islands = .read_csvs(files_state_cpg, "5mC")
+  )
+  profile_results <- list(
+    protein_coding = .read_csvs(
+      files_profile_pc, basename(dirname(files_profile_pc))
+    ),
+    cpg_islands = .read_csvs(files_profile_cpg, "5mC")
+  )
+
+  # ── 4. Store in EPK ─────────────────────────────────────────────────────
+  epk$enrichment_results$chromatin_states  <- enrichment_results
+  epk$enrichment_results$enrichment_profile <- profile_results
+
+  invisible(epk)
 }
