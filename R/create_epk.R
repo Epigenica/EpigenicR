@@ -276,7 +276,7 @@ create_epk <- function(
     out
   }
 
-  .enrich_stats_summary_from_bw_metadata <- function(stats_summary, bw_metadata) {
+  .enrich_stats_summary_from_bw_metadata <- function(stats_summary, bw_metadata, replicate_mode = "all") {
     if (is.null(stats_summary) || !"map_id" %in% names(stats_summary)) {
       return(stats_summary)
     }
@@ -296,7 +296,16 @@ create_epk <- function(
       warning("Duplicate map_id values detected in bw metadata (e.g., scaled/unscaled pairs). Using first occurrence per map_id.")
     }
 
-    ord <- match(stats_summary$map_id, md$map_id)
+    # When replicate_mode is "pooled", bw files are named _pooled but
+    # stats_summary tracks them as _rep1 (e.g. for cNUC product).
+    # Normalise stats_summary map_ids to _pooled for matching.
+    if (replicate_mode == "pooled") {
+      stats_lookup_id <- sub("_rep[0-9]+", "_pooled", stats_summary$map_id)
+    } else {
+      stats_lookup_id <- stats_summary$map_id
+    }
+
+    ord <- match(stats_lookup_id, md$map_id)
 
     if (!"marker" %in% names(stats_summary)) {
       stats_summary$marker <- md$marker[ord]
@@ -436,7 +445,11 @@ create_epk <- function(
   )
 
   if (!is.null(stats_summary)) {
-    .validate_bw_files_in_stats_summary(bw_files = bw_files, stats_summary = stats_summary)
+    .validate_bw_files_in_stats_summary(
+      bw_files = bw_files,
+      stats_summary = stats_summary,
+      replicate_mode = replicate_mode
+    )
   }
 
   # ===== NORMALIZE ANNOTATIONS =====
@@ -481,7 +494,9 @@ create_epk <- function(
   }
 
   # Enrich stats_summary for downstream plotting helpers
-  stats_summary <- .enrich_stats_summary_from_bw_metadata(stats_summary, bw_metadata)
+  stats_summary <- .enrich_stats_summary_from_bw_metadata(
+    stats_summary, bw_metadata, replicate_mode = replicate_mode
+  )
 
   if (!is.null(stats_summary)) {
     stats_summary <- as.data.frame(stats_summary, stringsAsFactors = FALSE)
@@ -751,7 +766,8 @@ create_epk <- function(
 
 #' Validate that BigWig files match stats_summary$map_id
 #' @keywords internal
-.validate_bw_files_in_stats_summary <- function(bw_files, stats_summary) {
+.validate_bw_files_in_stats_summary <- function(bw_files, stats_summary,
+                                                replicate_mode = "all") {
   if (!"map_id" %in% names(stats_summary)) {
     stop("'stats_summary' must contain a 'map_id' column.")
   }
@@ -780,7 +796,17 @@ create_epk <- function(
   }
 
   bw_map_id <- sub("\\.(unscaled|scaled)\\.bw$", "", bw_base)
-  missing_in_stats <- setdiff(bw_map_id, stats_summary$map_id)
+
+  # When replicate_mode is "pooled", bw files are named _pooled but
+  # stats_summary tracks them as _rep1 (e.g. for cNUC product).
+  # Normalise stats_summary map_ids to _pooled for matching.
+  if (replicate_mode == "pooled") {
+    stats_summary_map_id <- sub("_rep[0-9]+", "_pooled", stats_summary$map_id)
+  } else {
+    stats_summary_map_id <- stats_summary$map_id
+  }
+
+  missing_in_stats <- setdiff(bw_map_id, stats_summary_map_id)
 
   if (length(missing_in_stats) > 0) {
     stop(
