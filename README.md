@@ -26,7 +26,8 @@ remotes::install_github('cnluzon/wigglescout', build_vignettes = TRUE, force = T
 # (Requires access to Epigenica GitHub organization)
 remotes::install_github("epigenica/EpigenicR")
 
-# Or install from local source by downloading the repository as a ZIP file (on the repo press green code button and download the zip file and uncompress) and run:
+# Or install from local source by downloading the repository as a ZIP file
+# (press the green Code button on the repo, download, uncompress) and run:
 devtools::install_local("/path/to/EpigenicR")
 ```
 
@@ -41,9 +42,12 @@ EpigenicR provides tools for:
 - **ChromHMM integration**: Retrieve chromatin state annotations from Epigenome Roadmap
 - **Data structures**: Create EPK (EpiPeaK) objects containing MultiAssayExperiment data
 - **Correlation analysis**: Compute sample-sample correlations across markers
+- **Methylation analysis**: Calculate and visualize beta values from MBD-seq/CXXC assays
+- **Results management**: Load pre-computed enrichment and ChromHMM results into EPK objects
 
-## Quick Start
-### Dataset Contents
+---
+
+## Toy Dataset
 
 Stored in `minute_output/` structure (matching EpiFinder pipeline output):
 
@@ -51,389 +55,335 @@ Stored in `minute_output/` structure (matching EpiFinder pipeline output):
 inst/extdata/toy_dataset/
 └── minute_output/
     ├── bigwig/
-    │   └── 8 BigWig files (rep1 naming: *.rep1.hg38.unscaled.bw)
+    │   └── 6 BigWig files (pooled naming: *.pooled.hg38.unscaled.bw)
     └── reports/
         └── stats_summary.txt
 ```
 
-- **8 BigWig files**: Chromatin (H3K4me3, H3K27ac, INPUT) and methylation (5mC) profiles
-  - **SAMPLE-0008**: 5mC, H3K27ac, H3K4me3 (3 markers)
-  - **SAMPLE-0054**: 5mC, INPUT, H3K4me3 (3 markers)
-- **stats_summary.txt**: QC statistics with `map_id` column matching BigWig filenames
-- **toy_metadata**: Pre-extracted metadata from filenames (R data object)
-- **toy_stats_summary**: Processed QC statistics (R data object)
-- **toy_genes**: Example gene coordinates on chr22 (R data object)
+**BigWig files** (6 total, ~13 MB):
 
-**Markers**: 5mC, H3K4me3, H3K27ac, INPUT | **Genome**: hg38 | **Format**: unscaled BigWig | **Total**: ~13 MB
+| File | Marker | Sample |
+|------|--------|--------|
+| `Proj1_A1_5mC_1_SAMPLE-0008_pooled.hg38.unscaled.bw` | 5mC | SAMPLE-0008 |
+| `Proj1_A1_H3K27ac_1_SAMPLE-0008_pooled.hg38.unscaled.bw` | H3K27ac | SAMPLE-0008 |
+| `Proj1_B1_H3K4me3_1_SAMPLE-0008_pooled.hg38.unscaled.bw` | H3K4me3 | SAMPLE-0008 |
+| `Proj1_A1_5mC_1_SAMPLE-0054_pooled.hg38.unscaled.bw` | 5mC | SAMPLE-0054 |
+| `Proj1_A1_INPUT_1_SAMPLE-0054_pooled.hg38.unscaled.bw` | INPUT | SAMPLE-0054 |
+| `Proj1_B1_H3K4me3_1_SAMPLE-0054_pooled.hg38.unscaled.bw` | H3K4me3 | SAMPLE-0054 |
 
-### 0. Quick Start: Create EPK Directly
+**R data objects**:
 
-The simplest way to create an EPK object from pipeline output is to provide the path to the project directory containing the `minute_output/` structure and annotations (for example, `toy_genes`).
-The function automatically discovers BigWig files and QC statistics based on the expected directory structure and file naming conventions shown above.
-You can also provide BigWig files and the QC statistics table explicitly, as shown in the second example below.
+| Object | Description |
+|--------|-------------|
+| `toy_genes` | GRanges — 5 protein-coding genes on chr22 |
+| `toy_metadata` | Tibble — parsed BigWig filename metadata (10 cols) |
+| `toy_stats_summary` | Data frame — QC statistics matching BigWig files |
+| `enrichment_results` | List — pre-computed chromatin state distributions per marker |
+| `profile_results` | List — pre-computed enrichment profiles per marker and annotation |
+
+**Markers**: 5mC, H3K4me3, H3K27ac, INPUT | **Genome**: hg38 | **Format**: unscaled BigWig
+
+---
+
+## Workflows
+
+### 1. Create an EPK Object
+
+`create_epk()` is the entry point for all analysis. It supports two modes:
+
+- **Path mode**: point to a `pipeline_output_path`; BigWig files and `stats_summary.txt` are auto-discovered
+- **Explicit mode**: supply `bw_files` and `stats_summary` directly
+
+#### Path mode (recommended)
 
 ```r
 library(EpigenicR)
 
-# Path mode (auto-discovers files from minute_output/ structure)
-data(toy_genes)  # Load example annotations
+data(toy_genes)
+toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
+
 epk <- create_epk(
-  pipeline_output_path = "/path/to/project",  # Contains minute_output/
-  annotations = toy_genes
+  pipeline_output_path = toy_dir,
+  annotations          = toy_genes,
+  bigwig_scale         = "unscaled",
+  replicate_mode       = "pooled",
+  markers_to_exclude   = c("INPUT")
 )
 print(epk)
+# EPK object
+# -----------
+# * Markers: 5mC, H3K4me3, H3K27ac
+# * Experiments:
+#   - genes: 5 features × 2 samples, 3 assays
+# * Tables:
+#   - stats_summary: 6 rows × 17 cols
+# * Enrichment results: 0 tables
+# * Created: 2026-04-01 ...
 ```
 
-For users running from a cloned repository, this also works directly when your
-working directory is the repository root:
-
-```r
-data(toy_genes)
-
-# This path is valid in a cloned repo (run from the repo root)
-epk <- create_epk(
-  pipeline_output_path = "inst/extdata/toy_dataset/minute_output",
-  annotations = toy_genes,
-  experiment_names = "SvCn05",
-  bigwig_scale = "unscaled",
-  replicate_mode = "pooled",
-  markers_to_exclude = c("Input")
-)
-```
-
-If you installed the package (instead of running from a clone), use
-`system.file("extdata", "toy_dataset", package = "EpigenicR")` to resolve the
-data path portably.
-
-Or with explicit files:
+#### Explicit mode
 
 ```r
 toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
+
 bw_files <- list.files(
   file.path(toy_dir, "minute_output", "bigwig"),
-  pattern = "\\.bw$",
-  full.names = TRUE
+  pattern = "\\.bw$", full.names = TRUE
 )
 stats_summary <- read.table(
   file.path(toy_dir, "minute_output", "reports", "stats_summary.txt"),
-  header = TRUE, sep = "\\t", stringsAsFactors = FALSE
+  header = TRUE, sep = "\t", stringsAsFactors = FALSE
 )
 
-epk <- create_epk(
-  bw_files = bw_files,
-  annotations = toy_genes,
-  stats_summary = stats_summary
-)
-```
-
-If your BigWig filenames follow the expected naming convention, sample metadata is derived
-automatically from `bw_files`. For non-standard names, provide `sample_metadata` explicitly
-with columns `marker`, `sample_id`, and `replicate` (optionally `bw_file` for filename-based
-matching).
-
-```r
-sample_metadata <- data.frame(
-  bw_file = basename(bw_files),
-  marker = c("M2", "M2", "M3", "M3"),
-  sample_id = c("Donor1_S1", "Donor1_S2", "Donor1_S1", "Donor1_S2"),
-  replicate = c("pooled", "pooled", "pooled", "pooled"),
-  stringsAsFactors = FALSE
-)
-
-epk <- create_epk(
-  bw_files = bw_files,
-  annotations = toy_genes,
-  stats_summary = stats_summary,
-  sample_metadata = sample_metadata
-)
-```
-
-See [inst/scripts/CREATE_EPK_USAGE.md](inst/scripts/CREATE_EPK_USAGE.md) for comprehensive examples.
-
-### 1. Extract Metadata from BigWig Files
-
-`create_metadata_df()` is optimized for Epigenica/EpiFinder naming convention (for example, `Proj1_A1_H3K4me3_1_SAMPLE-0008_rep1.hg38.unscaled.bw`).
-Using this convention ensures consistent extraction of `project_id`, `batch`, `marker`, `sample_id`, and `replicate`.
-
-```r
-library(EpigenicR)
-
-# Create metadata from BigWig filenames
-bw_files <- c(
-  "project1_batch1_H3K4me3_rerun_sample1_rep1.hg38.scaled.bw",
-  "project1_batch1_H3K4me3_rerun_sample1_rep2.hg38.scaled.bw",
-  "project1_batch1_H3K9me3_rerun_sample2_rep1.hg38.scaled.bw"
-)
-# or use list.files() to get actual files from a directory
-bw_files <- list.files("minute_output/bigwig/", pattern = "\\.bw$", full.names = TRUE)
-
-metadata <- create_metadata_df(bw_files = bw_files)
-print(metadata)
-# A tibble: 6 × 10
-#   bw_file                project_id batch marker rerun_id sample_id replicate genome scaling matched
-#   <chr>                  <chr>      <chr> <chr>  <chr>    <chr>     <chr>     <chr>  <chr>   <lgl>
-# 1 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… rep1      hg38   unscal… TRUE
-# 2 Proj1_A1_5mC_1_SAMPLE… Proj1      A1    5mC    1        SAMPLE-0… rep1      hg38   unscal… TRUE
-# 3 Proj1_A1_H3K27ac_1_SA… Proj1      A1    H3K27… 1        SAMPLE-0… rep1      hg38   unscal… TRUE
-# 4 Proj1_A1_INPUT_1_SAMP… Proj1      A1    INPUT  1        SAMPLE-0… rep1      hg38   unscal… TRUE
-# 5 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… rep1      hg38   unscal… TRUE
-# 6 Proj1_B1_H3K4me3_1_SA… Proj1      B1    H3K4m… 1        SAMPLE-0… rep1      hg38   unscal… TRUE
-```
-
-### 2. Download Genomic Annotations
-Here you download and create BED files for genomic features (genes, CpG islands) and retrieve chromatin states from Epigenome Roadmap.
-Chromatin states can differ by project; here we use E107 (Skeletal Muscle Male) as an example.
-See the full list of available chromatin state annotations and additional information [here](https://egg2.wustl.edu/roadmap/web_portal/chr_state_learning.html).
-
-```r
-# Ensure GTF file and generate BED files for genes and TSS regions
-annotation_paths <- ensure_gtf_and_beds(
-  gtf_file = "data/gencode.v38.annotation.gtf",
-  gtf_url = "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_38/gencode.v38.annotation.gtf.gz",
-  genes_bed = "data/genes.hg38.bed",
-  tss2k_bed = "data/genes_tss_2kb.hg38.bed"
-)
-
-# Download ChromHMM annotations
-# Create the folder for ChromHMM annotations
-
-download_chromhmm_annotations(
-  annotations = c("E107_15_coreMarks_hg38lift_mnemonics.bed"),
-  dest_dir = "data/chromHmm_annotations/"
-)
-```
-
-### 3. Generate QC Plots
-In following steps:
-- Loading `stats_summary` data frame containing QC statistics for each sample/marker.
-- Calculating fraction mapped reads and preparing the data for plotting.
-- Using `plot_qc_stats()` to create visualizations of QC metrics across conditions and markers:
-  - static (ggplot2)
-  - interactive (plotly)
-
-```r
-# Prepare QC statistics data frame
-stats_summary <- data.frame(
-  marker = rep(c("H3K4me3", "H3K9me3", "H3K27me3"), each = 3),
-  replicate = rep(c("rep1", "rep2", "rep3"), 3),
-  sample_id = rep("sample1", 9),
-  condition = "Control",
-  total_reads = runif(9, 1e6, 5e6),
-  mapped_reads = runif(9, 8e5, 4.5e6),
-  library_size = runif(9, 7e5, 4e6)
-)
-# Or load from actual QC summary tables generated during pipeline
-stats_summary <- read.csv(
-  file.path("minute_output/reports/stats_summary.txt"),
-  sep = "\t", header = TRUE
-)
-
-# Or load QC table directly from a saved EPK object
-epk_loaded <- readRDS("data/project.epk.rds")
-stats_summary <- epk_loaded$tables$stats_summary
-# Add fraction mapped
-stats_summary <- as_tibble(stats_summary) %>% mutate(frac_mapped = stats_summary$raw_mapped/stats_summary$raw_demultiplexed)
-# Remove frac_mapq_filtered column if exists
-stats_summary <- stats_summary %>% select(-frac_mapq_filtered)
-
-# Extract marker information and metadata from map_id column created by the pipeline
-stats_summary <- stats_summary %>%
-  mutate(create_metadata_df(map_id_vector = stats_summary$map_id, bw_files = bw_files)[,c("marker","sample_id","batch")], sample_id_rep = paste0(sample_id, '_', batch))
-
-# Create static ggplot2 QC figure
-qc_plot <- plot_qc_stats(
-  data = stats_summary,
-  stats = c("raw_demultiplexed", "frac_mapped", "percent_duplication", "library_size"),
-  engine = "ggplot",
-  sample_labeling = 'sample_id',
-  legend_position = "bottom",
-  ncol = 4
-)
-print(qc_plot)
-
-# Create interactive plotly version
-qc_interactive <- plot_qc_stats(
-  data = stats_summary,
-  sample_labeling = 'sample_id',
-  engine = "plotly",
-  ncol = 3
-)
-qc_interactive
-```
-
-**Example Output:**
-  The toy dataset produces plots like this:
-
-  <img src="man/figures/qc_plot_example.png" width="100%" />
-
-  *QC plot showing final mapped reads, library size, and duplication rate for toy dataset samples.*
-
-### 4. Create, Save, and Load an EPK Object
-
-`create_epk()` is the recommended way to build EPK objects. It supports one annotation or multiple feature annotations (for example protein-coding genes, CpG islands, enhancers).
-
-```r
-library(EpigenicR)
-library(MultiAssayExperiment)
-
-toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
 data(toy_genes)
-
-# Simple path mode
 epk <- create_epk(
-  pipeline_output_path = toy_dir,
-  annotations = toy_genes
+  bw_files       = bw_files,
+  annotations    = toy_genes,
+  stats_summary  = stats_summary,
+  replicate_mode = "pooled"
 )
-
-# Save EPK object
-saveRDS(epk, file = "data/project.epk.rds")
-
-# Load EPK object later
-epk_loaded <- readRDS("data/project.epk.rds")
-print(epk_loaded)
-# EPK object
-# -----------
-# * Experiments:
-#   - primary_annotation: 5 features × 2 samples, 3 assays
-# * Tables:
-#   - stats_summary: 8 rows × 13 cols
-# * Enrichment results: 2 tables
-# * Created: 2026-03-09 21:19:56
 ```
 
-#### Multiple BED files in one EPK
+#### Multiple annotations in one EPK
 
 ```r
 epk_multi <- create_epk(
   pipeline_output_path = toy_dir,
   annotations = list(
-    protein_coding = "data/protein_coding.bed",
+    genes       = toy_genes,
     cpg_islands = "data/cpg_islands.bed",
-    enhancer = "data/enhancer.bed"
+    enhancers   = "data/enhancers.bed"
   )
 )
 
 names(MultiAssayExperiment::experiments(epk_multi$mse))
-# [1] "protein_coding" "cpg_islands" "enhancer"
+# [1] "genes" "cpg_islands" "enhancers"
 ```
 
-#### Add new features to `mse` slot after creation
+#### Include batch in column labels
+
+When samples come from multiple batches, set `label_by = "sample_id_batch"` to append
+the batch identifier to each column name in the assay matrices — useful for distinguishing
+samples across batches in downstream plots.
 
 ```r
-# Add new features directly to an existing EPK object
-epk_loaded <- add_features_to_epk(
-  epk = epk_loaded,
+epk <- create_epk(
+  pipeline_output_path = toy_dir,
+  annotations          = toy_genes,
+  replicate_mode       = "pooled",
+  label_by             = "sample_id_batch"   # default: "sample_id"
+)
+# Column names become e.g. "SAMPLE-0008_A1", "SAMPLE-0054_B1"
+```
+
+#### Save and reload
+
+```r
+saveRDS(epk, "project.epk.rds")
+epk <- readRDS("project.epk.rds")
+```
+
+---
+
+### 2. Add Feature Annotations to an Existing EPK
+
+`add_features_to_epk()` extends an existing EPK with new annotation experiments without
+re-reading BigWig files.
+
+```r
+data(toy_genes)
+toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
+
+epk <- add_features_to_epk(
+  epk         = epk,
   pipeline_output_path = toy_dir,
   annotations = list(
-    enhancer = "data/enhancer.bed",
-    cpg_islands = "data/cpg_islands.bed"
+    cpg_islands = "data/cpg_islands.bed",
+    enhancers   = "data/enhancers.bed"
   )
 )
 
-# Optionally replace existing experiment names
-# epk_loaded <- add_features_to_epk(
-#   epk = epk_loaded,
-#   pipeline_output_path = toy_dir,
-#   annotations = list(primary_annotation = "data/updated_features.bed"),
-#   overwrite = TRUE
-# )
-
-names(MultiAssayExperiment::experiments(epk_loaded$mse))
+names(MultiAssayExperiment::experiments(epk$mse))
+# [1] "genes" "cpg_islands" "enhancers"
 ```
 
-`add_features_to_epk()` follows the same metadata rules as `create_epk()`: if metadata can be
-parsed from `bw_files`, it is derived automatically; otherwise provide `sample_metadata` with the
-expected columns and the feature addition will work in explicit mode.
+Use `overwrite = TRUE` to replace an existing experiment by name.
+
+---
+
+### 3. Extract Metadata from BigWig Files
+
+`create_metadata_df()` parses the EpiFinder naming convention
+(`PROJECT_BATCH_MARKER_RERUN_SAMPLE_REPLICATE.GENOME.SCALING.bw`) into structured columns.
 
 ```r
-epk_loaded <- add_features_to_epk(
-  epk = epk_loaded,
-  bw_files = bw_files,
-  stats_summary = stats_summary,
-  sample_metadata = sample_metadata,
-  annotations = list(cpg_islands = "data/cpg_islands.bed")
+data(toy_metadata)
+print(toy_metadata)
+# A tibble: 6 × 10
+#   bw_file                    project_id batch marker  rerun_id sample_id  replicate genome  scaling   matched
+#   <chr>                      <chr>      <chr> <chr>   <chr>    <chr>      <chr>     <chr>   <chr>     <lgl>
+# 1 Proj1_A1_5mC_1_SAMPLE-0…   Proj1      A1    5mC     1        SAMPLE-0008 pooled   hg38    unscaled  TRUE
+# 2 Proj1_A1_5mC_1_SAMPLE-0…   Proj1      A1    5mC     1        SAMPLE-0054 pooled   hg38    unscaled  TRUE
+# 3 Proj1_A1_H3K27ac_1_SAMP…   Proj1      A1    H3K27ac 1        SAMPLE-0008 pooled   hg38    unscaled  TRUE
+# 4 Proj1_A1_INPUT_1_SAMPLE-…  Proj1      A1    INPUT   1        SAMPLE-0054 pooled   hg38    unscaled  TRUE
+# 5 Proj1_B1_H3K4me3_1_SAMP…   Proj1      B1    H3K4me3 1        SAMPLE-0008 pooled   hg38    unscaled  TRUE
+# 6 Proj1_B1_H3K4me3_1_SAMP…   Proj1      B1    H3K4me3 1        SAMPLE-0054 pooled   hg38    unscaled  TRUE
+
+# Or parse directly from files
+bw_files <- list.files("minute_output/bigwig/", pattern = "\\.bw$", full.names = TRUE)
+metadata <- create_metadata_df(bw_files = bw_files)
+```
+
+---
+
+### 4. QC Plots
+
+`plot_qc_stats()` generates per-marker boxplots with jittered sample points for any numeric
+column in a `stats_summary` data frame.
+
+```r
+data(toy_stats_summary)
+
+# Static ggplot2
+plot_qc_stats(
+  data           = toy_stats_summary,
+  stats          = c("raw_demultiplexed", "frac_mapped", "percent_duplication", "library_size"),
+  engine         = "ggplot",
+  sample_labeling = "sample_id",
+  legend_position = "bottom",
+  ncol           = 4
+)
+
+# Interactive plotly
+plot_qc_stats(
+  data           = toy_stats_summary,
+  engine         = "plotly",
+  sample_labeling = "sample_id"
 )
 ```
+
+**Example output:**
+
+<img src="man/figures/qc_plot_example.png" width="100%" />
+
+*QC plot showing mapped reads, library size, and duplication rate for toy dataset samples.*
+
+`scaling_plot()` visualises the minute scaling ratio (msr) per marker:
+
+```r
+scaling_plot(
+  epk             = epk,
+  markers_to_exclude = c("INPUT"),
+  sample_labeling = "sample_id_rep"
+)
+```
+
+---
 
 ### 5. Compute Sample Correlations
 
-Use `compute_all_cor()` on an experiment in the `mse` slot (for example `primary_annotation`, `protein_coding`, or `cpg_islands`).
-
 ```r
-# Compute correlations for all markers in a specific experiment
-cor_matrices <- compute_all_cor(
-  mse = epk_loaded$mse,
-  exp_name = "primary_annotation",
-  method = "pearson",
-  transform = "log1p"
-)
+# Correlations for all markers in one experiment
+epk <- compute_all_cor(epk, exp_name = "genes", method = "pearson", transform = "log1p")
+# Stored in epk$derived$all_cor$genes
 
-# Access correlation matrix for a specific marker
-cor_h3k4me3 <- cor_matrices$H3K4me3
+# Correlations across all experiments
+epk <- compute_sample_cor(epk, method = "pearson", transform = "log1p")
+# Stored in epk$derived$sample_cor
+
+# Visualise as a heatmap
+heatmap_cor_marker(epk, exp_name = "genes", marker = "H3K4me3")
 ```
 
-### 5. ChromHMM Enrichment Analysis
+---
 
-Compute enrichment profiles and chromatin state distributions for markers at genomic features
-using ChromHMM (or other) chromatin state annotations. This workflow generates:
-- **Enrichment profiles**: Signal density at TSS or other regions across samples
-- **Chromatin state distributions**: Mean enrichment per chromatin state (boxplots)
+### 6. Beta Value Calculation (Methylation)
 
-Two worker functions handle different marker types; `dispatch_chromhmm_jobs()` orchestrates
-them in parallel using `callr` background processes.
-
-#### Setup requirements
+For MBD-seq/CXXC products, `calculate_beta_val()` computes beta values from the
+`mbdseq` (M2) and `cxxc` (M3) assays using `(M2 + p) / (M2 + M3 + 2p)`.
 
 ```r
-library(EpigenicR)
+epk <- calculate_beta_val(
+  epk        = epk,
+  feature    = "cpg_islands",
+  pseudocount = 1,
+  method     = "both"     # "raw", "quantile", or "both"
+)
 
-# Discover BigWig files
-bw_files <- list.files(bigwig_dir, pattern = "\\.bw$", full.names = TRUE, recursive = FALSE)
-if (length(bw_files) == 0) stop("No .bw files found in bigwig_dir: ", bigwig_dir)
-
-# Parse metadata from filenames
-bw_df <- create_metadata_df(bw_files = bw_files)
-
-# Drop rows that did not match the expected naming schema
-if ("matched" %in% names(bw_df) && any(!bw_df$matched)) {
-  warning("Some bigWig files did not match the expected naming pattern and were dropped.")
-  bw_df <- bw_df[bw_df$matched, , drop = FALSE]
-}
-
-# Product-specific scaling filter
-# GenomePro uses scaled bigWigs; all others use unscaled
-if (product == "GenomePro") {
-  bw_df <- bw_df[bw_df$scaling == "scaled" | bw_df$marker == "INPUT", , drop = FALSE]
-} else {
-  bw_df <- bw_df[bw_df$scaling == "unscaled", , drop = FALSE]
-}
-
-# Absolute paths (bw_file may be basename-only from the parser)
-bw_df$bw_path <- ifelse(
-  grepl("^/", bw_df$bw_file),
-  bw_df$bw_file,
-  file.path(bigwig_dir, bw_df$bw_file)
+# Visualise beta-value distributions
+plot_beta_density(
+  epk        = epk,
+  feature    = "cpg_islands",
+  method     = "both"
 )
 ```
 
-#### Single-marker run: `run_chromhmm_histone_enrichment()`
+---
+
+### 7. Interactive Enrichment Profile
+
+`plot_enrichment_interactive()` renders a multi-sample enrichment profile as an interactive
+plotly figure with hover highlighting.
 
 ```r
-loci_gr <- readRDS("data/genes_protein_coding_gr.rds")   # GRanges object
+data(profile_results)
+
+plot_enrichment_interactive(
+  df          = profile_results$H3K4me3$protein_coding,
+  marker      = "H3K4me3",
+  plot_title  = "H3K4me3 Enrichment at TSS",
+  mid_coord   = "start",
+  group_by    = "sample_id"
+)
+```
+
+---
+
+### 8. Download Genomic Annotations
+
+```r
+# Download GTF and create gene / TSS BED files
+ensure_gtf_and_beds(
+  gtf_file  = "data/gencode.v38.annotation.gtf",
+  gtf_url   = "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_38/gencode.v38.annotation.gtf.gz",
+  genes_bed = "data/genes.hg38.bed",
+  tss2k_bed = "data/genes_tss_2kb.hg38.bed"
+)
+
+# Download ChromHMM segmentation (E107 = Skeletal Muscle Male)
+# Full list: https://egg2.wustl.edu/roadmap/web_portal/chr_state_learning.html
+download_chromhmm_annotations(
+  annotations = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+  dest_dir    = "data/chromHmm_annotations/"
+)
+```
+
+---
+
+### 9. ChromHMM Enrichment Analysis
+
+Compute enrichment profiles and chromatin state distributions for each marker. Two
+specialised functions handle histone marks and methylation respectively;
+`dispatch_chromhmm_jobs()` runs them in parallel.
+
+#### Histone marks
+
+```r
+loci_gr <- readRDS("data/genes_protein_coding_gr.rds")
 
 run_chromhmm_histone_enrichment(
-  bw_df        = bw_df,
-  bigwig_dir   = bigwig_dir,
-  mk           = "H3K4me3",
-  loci         = loci_gr,
-  output_dir   = "output/chromhmm/H3K4me3",
+  bw_df               = bw_df,
+  bigwig_dir          = "minute_output/bigwig/",
+  mk                  = "H3K4me3",
+  loci                = loci_gr,
+  output_dir          = "output/chromhmm/H3K4me3",
   chromHmm_path       = "data/chromHmm_annotations/",
   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-  product      = product
+  product             = "cChIP"
 )
 ```
 
-Output files written to `output_dir`:
+Output files per marker:
 
 | File | Description |
 |------|-------------|
@@ -441,159 +391,133 @@ Output files written to `output_dir`:
 | `<marker>_profile_start_data.csv` | Profile data table |
 | `<marker>_chromatin_state_dist.png` | Chromatin state distribution boxplot |
 | `<marker>_chromatin_state_dist.csv` | State distribution table |
-| `.done` | Sentinel written on successful completion |
+| `.done` | Completion sentinel |
 
-#### Methylation: `run_chromhmm_methylation_enrichment()`
+#### Methylation
 
 ```r
 run_chromhmm_methylation_enrichment(
-  bw_df        = bw_df,
-  bigwig_dir   = bigwig_dir,
-  mk           = "5mC",
-  loci         = loci_gr,
-  output_dir   = "output/chromhmm/5mC",
+  bw_df               = bw_df,
+  bigwig_dir          = "minute_output/bigwig/",
+  mk                  = "5mC",
+  loci                = loci_gr,
+  output_dir          = "output/chromhmm/5mC",
   chromHmm_path       = "data/chromHmm_annotations/",
   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-  product      = product
+  product             = "cNUC"
 )
 ```
 
-#### Parallel batch run: `dispatch_chromhmm_jobs()`
-
-For large-scale analysis, run all histone markers concurrently in `callr` background
-processes. The function maintains a rolling worker pool of size `n_workers`, polling
-every second and logging per-marker progress and errors.
+#### Parallel batch run
 
 ```r
-# Markers to process (exclude INPUT control)
-markers_to_run <- unique(epk$tables$stats_summary$marker)
-markers_to_run <- markers_to_run[markers_to_run != "INPUT"]
+markers_to_run <- setdiff(unique(epk$tables$stats_summary$marker), "INPUT")
+n_workers <- max(1L, min(length(markers_to_run), parallel::detectCores() - 1L))
 
-# Auto-detect worker count: one core per marker, leaving one core free
-# Set n_workers = 0 to trigger auto-detection; any positive integer overrides it
-n_workers_param <- 0L   # or set explicitly, e.g. 4L
-n_workers <- if (n_workers_param == 0L) {
-  max(1L, min(length(markers_to_run), parallel::detectCores() - 1L))
-} else {
-  as.integer(n_workers_param)
-}
-
-output_dir_path <- "output/chromhmm/protein_coding"
-dir.create(output_dir_path, recursive = TRUE, showWarnings = FALSE)
-
-# Skip markers whose output directory already contains a .done sentinel
-.expected_histone <- function(op, mk) c(
-  file.path(op, paste0(mk, "_profile_start.png")),
-  file.path(op, paste0(mk, "_chromatin_state_dist.png")),
-  file.path(op, paste0(mk, "_chromatin_state_dist.csv"))
-)
-
-markers_needed <- Filter(function(mk) {
-  op <- file.path(output_dir_path, mk)
-  !file.exists(file.path(op, ".done")) || !all(file.exists(.expected_histone(op, mk)))
-}, markers_to_run)
-
-if (length(markers_needed) > 0) {
-  common_args <- list(
-    bw_df               = bw_df,
-    bigwig_dir          = bigwig_dir,
-    loci                = loci_gr,
-    chromHmm_path       = "data/chromHmm_annotations/",
-    chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-    product             = product
-  )
-
-  jobs <- lapply(markers_needed, function(mk) {
-    op <- file.path(output_dir_path, mk)
-    dir.create(op, recursive = TRUE, showWarnings = FALSE)
-    list(
-      fn   = run_chromhmm_histone_enrichment,
-      mk   = mk,
-      args = c(list(mk = mk, output_dir = op), common_args)
+jobs <- lapply(markers_to_run, function(mk) {
+  op <- file.path("output/chromhmm/protein_coding", mk)
+  dir.create(op, recursive = TRUE, showWarnings = FALSE)
+  list(
+    fn   = run_chromhmm_histone_enrichment,
+    mk   = mk,
+    args = list(
+      bw_df               = bw_df,
+      bigwig_dir          = "minute_output/bigwig/",
+      mk                  = mk,
+      loci                = loci_gr,
+      output_dir          = op,
+      chromHmm_path       = "data/chromHmm_annotations/",
+      chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+      product             = "cChIP"
     )
-  })
+  )
+})
 
-  # Parallel: rolling worker pool via callr background processes
-  dispatch_chromhmm_jobs(jobs, n_workers = n_workers)
-
-  # Sequential alternative (IDE-safe, blocking):
-  # for (job in jobs) callr::r(func = job$fn, args = job$args)
-}
+dispatch_chromhmm_jobs(jobs, n_workers = n_workers)
 ```
 
-#### Setting `n_workers`
-
-| Value | Behaviour |
-|-------|-----------|
-| `0L` | Auto-detect: `min(n_markers, detectCores() - 1)` |
-| `1L` | Effectively sequential but still uses a background process |
+| `n_workers` value | Behaviour |
+|-------------------|-----------|
+| `0L` | Auto: `min(n_markers, detectCores() - 1)` |
+| `1L` | Sequential (background process) |
 | `N > 1` | Up to N markers run concurrently |
 
-Use `1L` or the sequential loop when debugging; use auto-detect for production runs.
+---
 
-#### Troubleshooting
+### 10. Load Pre-computed Results into EPK
 
-**Empty BigWig inputs**: If `bw_df` is empty after filtering, check:
-- BigWig filenames match the EpiFinder naming convention (see `create_metadata_df()`)
-- `product` value matches available `scaling` column values (`"scaled"` vs `"unscaled"`)
-- Files physically exist: `file.exists(bw_df$bw_path)`
+After ChromHMM runs complete, `add_results_to_epk()` reads the output CSVs and stores
+them in `epk$enrichment_results`.
 
-**Worker errors**: `dispatch_chromhmm_jobs()` warns on non-zero exit and prints the
-worker's stderr. To reproduce an error interactively, run the failing job directly:
+The function handles two directory layouts automatically:
+
+- **Nested** — `<annotation>/<marker>/files.csv` (e.g., `protein_coding/H3K4me3/`)
+- **Flat** — `<annotation>/files.csv` (e.g., `CpG_islands/methylation_profile_start_data.csv`)
+
 ```r
-callr::r(func = run_chromhmm_histone_enrichment, args = jobs[[i]]$args)
+epk <- add_results_to_epk(epk, results_path = "output/chromhmm")
+
+# Results are now accessible:
+# epk$enrichment_results$chromatin_states$protein_coding$H3K4me3
+# epk$enrichment_results$enrichment_profile$protein_coding$H3K4me3
+# epk$enrichment_results$chromatin_states$cpg_islands$methylation
 ```
 
-**Stale `.done` sentinels**: Delete the per-marker output directory (or just the `.done`
-file) to force re-computation:
+#### Interactive ChromHMM heatmap
+
 ```r
-file.remove(file.path(output_dir_path, "H3K4me3", ".done"))
+data(enrichment_results)
+epk$enrichment_results$chromatin_states <- enrichment_results
+
+interactive_heatmap_chromhmm(
+  epk         = epk,
+  marker      = "H3K4me3",
+  loci        = "protein_coding",
+  show_pooled = FALSE
+)
 ```
 
-**Output**: PNG plots and CSV tables written per marker under `output_dir/<marker>/`.
+---
 
-## Main Functions
+## Function Reference
 
-| Function | Description |
-|----------|-------------|
-| `create_epk()` | Create EPK object from BigWig files and annotations |
-| `extract_marker_names()` | Extract marker names from sample IDs |
-| `create_metadata_df()` | Parse BigWig filenames into structured metadata |
-| `plot_qc_stats()` | Generate QC plots (static or interactive) |
-| `plot_enrichment_interactive()` | Interactive enrichment profile plot with hover highlighting |
-| `scaling_plot()` | Plot scaling factors (msr) across samples |
-| `ensure_gtf_and_beds()` | Download GTF and create BED files for genes/TSS |
-| `download_chromhmm_annotations()` | Retrieve ChromHMM chromatin state annotations |
-| `run_chromhmm_histone_enrichment()` | ChromHMM enrichment for histone modifications |
-| `run_chromhmm_methylation_enrichment()` | ChromHMM enrichment for methylation marks |
-| `dispatch_chromhmm_jobs()` | Parallel orchestration of ChromHMM jobs |
-| `compute_sample_cor()` | Compute sample-sample correlation for one marker |
-| `compute_all_cor()` | Compute correlations across all markers |
-| `print.EPK()` | Print method for EPK objects |
+| Function | Category | Key Arguments | Returns / Output |
+|----------|----------|---------------|-----------------|
+| `create_epk()` | EPK creation | `pipeline_output_path` or `bw_files`, `annotations`, `replicate_mode`, `label_by` | `EPK` object |
+| `add_features_to_epk()` | EPK creation | `epk`, `annotations`, `pipeline_output_path` or `bw_files`, `overwrite` | Updated `EPK` |
+| `add_results_to_epk()` | Results loading | `epk`, `results_path` | Updated `EPK` with enrichment slots populated |
+| `create_metadata_df()` | Metadata | `bw_files` or `map_id_vector` | Tibble: project_id, batch, marker, sample_id, replicate, … |
+| `extract_marker_names()` | Metadata | `id`, `markers` | Character vector of marker names |
+| `plot_qc_stats()` | QC | `data` or `epk`, `stats`, `engine`, `sample_labeling`, `ncol` | `ggplot` or `plotly` figure |
+| `scaling_plot()` | QC | `data` or `epk`, `markers_to_exclude`, `sample_labeling` | `ggplot` figure |
+| `compute_all_cor()` | Correlation | `epk`, `exp_name`, `method`, `transform` | Updated `EPK`; matrices in `epk$derived$all_cor` |
+| `compute_sample_cor()` | Correlation | `epk`, `method`, `transform` | Updated `EPK`; matrices in `epk$derived$sample_cor` |
+| `heatmap_cor_marker()` | Correlation | `epk`, `exp_name`, `marker` | `ggplot` heatmap |
+| `calculate_beta_val()` | Methylation | `epk`, `feature`, `pseudocount`, `method` | Updated `EPK` with beta assays added |
+| `plot_beta_density()` | Methylation | `epk`, `feature`, `method` | `ggplot` density figure |
+| `plot_enrichment_interactive()` | Visualisation | `df` or `epk`, `marker`, `loci`, `mid_coord`, `group_by` | `plotly` figure |
+| `interactive_heatmap_chromhmm()` | Visualisation | `epk`, `marker`, `loci`, `show_pooled` | `plotly` heatmap |
+| `ensure_gtf_and_beds()` | Annotations | `gtf_file`, `gtf_url`, `genes_bed`, `tss2k_bed` | BED files written to disk |
+| `download_chromhmm_annotations()` | Annotations | `annotations`, `dest_dir` | BED files written to disk |
+| `run_chromhmm_histone_enrichment()` | ChromHMM | `bw_df`, `mk`, `loci`, `output_dir`, `chromHMM_annotation`, `product` | PNG + CSV files per marker |
+| `run_chromhmm_methylation_enrichment()` | ChromHMM | `bw_df`, `mk`, `loci`, `output_dir`, `chromHMM_annotation`, `product` | PNG + CSV files per marker |
+| `dispatch_chromhmm_jobs()` | ChromHMM | `jobs`, `n_workers` | Runs jobs in parallel; files written by workers |
+| `print.EPK()` | Utility | `x` | Console summary of EPK slots and dimensions |
 
-**Expected Output:**
-
-Multi-panel QC plot:<br>  
-<img src="man/figures/qc_plot_example.png" width="100%" />  
-
-Single statistic view:<br>  
-<img src="man/figures/qc_plot_simple.png" width="70%" />  
-
-*QC plots generated from the toy dataset showing various quality metrics across epigenetic markers.*
-
-> **Note**: Example plots shown above were generated using `inst/scripts/generate_example_plots.R`. You can regenerate them by running: `Rscript inst/scripts/generate_example_plots.R`
-
-For more details, see `inst/extdata/toy_dataset/README.md`
+---
 
 ## Dependencies
 
 Core dependencies:
 - `dplyr`, `tidyr`, `stringr`, `tibble` (data manipulation)
 - `ggplot2`, `plotly`, `patchwork` (visualization)
-- `wigglescout` (BigWig processing)
-- `GenomicRanges`, `SummarizedExperiment`, `MultiAssayExperiment` (Bioconductor data structures)
+- `wigglescout` (BigWig processing — requires `future` 1.34.0)
+- `GenomicRanges`, `SummarizedExperiment`, `MultiAssayExperiment` (Bioconductor)
+- `callr`, `future`, `furrr` (parallelisation)
 
-See [DESCRIPTION](DESCRIPTION) for full dependency list.
+See [DESCRIPTION](DESCRIPTION) for the full dependency list.
+
+---
 
 ## Citation
 
@@ -613,26 +537,20 @@ This package builds upon excellent open-source tools from the Bioconductor and R
 - **wigglescout** for BigWig processing
 - **GenomicRanges** and **SummarizedExperiment** for genomic data structures
 - **ggplot2** and **plotly** for visualization
-- And many other dependencies listed in [DESCRIPTION](DESCRIPTION)
 
 ## License
 
-GPL-3 - Copyright (c) 2026 Epigenica
-
-This package is licensed under GPL-3, ensuring that any derivative works remain open-source. Access is restricted via private GitHub repository. See [LICENSE](LICENSE) file for details.
+GPL-3 — Copyright (c) 2026 Epigenica
 
 ## Contributing
 
-This package is maintained in Epigenica's private GitHub repository.
-
 For Epigenica team members:
-- Submit issues on GitHub: https://github.com/epigenica/EpigenicR/issues
+- Submit issues: https://github.com/epigenica/EpigenicR/issues
 - Create pull requests for new features
 - Follow internal development guidelines
 
 ## Contact
 
-For questions, issues, or support:
 - GitHub Issues: https://github.com/epigenica/EpigenicR/issues
 - Package Maintainer: nima.rafati@epigenica.se
 

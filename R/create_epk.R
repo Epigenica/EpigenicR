@@ -166,7 +166,8 @@ create_epk <- function(
   sample_metadata = NULL,
   bigwig_scale = c("unscaled", "scaled", "both"),
   replicate_mode = c("all", "pooled", "replicates"),
-  scaling_info_file = NULL
+  scaling_info_file = NULL,
+  label_by = c("sample_id", "sample_id_batch")
 ) {
 
   # ---------- local helpers ----------
@@ -379,6 +380,7 @@ create_epk <- function(
 
   bigwig_scale <- match.arg(bigwig_scale)
   replicate_mode <- match.arg(replicate_mode)
+  label_by <- match.arg(label_by)
   
   # Check that annotations is provided
   if (is.null(annotations)) {
@@ -566,7 +568,12 @@ create_epk <- function(
       message("    Marker: ", marker)
       marker_idx <- !is.na(bw_metadata$marker) & bw_metadata$marker == marker
       marker_bw_files <- bw_files[marker_idx]
-      marker_labels <- bw_metadata$sample_id[marker_idx]
+      marker_labels <- if (label_by == "sample_id_batch") {
+        paste(bw_metadata$sample_id[marker_idx],
+              bw_metadata$batch[marker_idx], sep = "_")
+      } else {
+        bw_metadata$sample_id[marker_idx]
+      }
 
       if (length(marker_bw_files) == 0) {
         stop("No BigWig files available for marker '", marker, "' after filtering.")
@@ -890,8 +897,9 @@ create_epk <- function(
   # e.g.: Proj1_A1_H3K4me3_1_SAMPLE-0008_pooled.hg38.unscaled.bw
 
   metadata <- data.frame(
-    bw_file = basename(bw_files),
-    marker = NA_character_,
+    bw_file   = basename(bw_files),
+    marker    = NA_character_,
+    batch     = NA_character_,
     sample_id = NA_character_,
     replicate = NA_character_,
     stringsAsFactors = FALSE
@@ -917,7 +925,8 @@ create_epk <- function(
     g <- regmatches(filename, m)[[1]]
 
     if (length(g) > 0) {
-      metadata$marker[i] <- g[4]
+      metadata$marker[i]    <- g[4]
+      metadata$batch[i]     <- g[3]
       metadata$sample_id[i] <- g[6]
       metadata$replicate[i] <- tolower(g[7])
       next
