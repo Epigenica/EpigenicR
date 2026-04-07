@@ -271,10 +271,19 @@ plot_qc_stats(
 `scaling_plot()` visualises the minute scaling ratio (msr) per marker:
 
 ```r
+# Default: each marker facet has its own y-axis
 scaling_plot(
-  epk             = epk,
+  epk                = epk,
   markers_to_exclude = c("INPUT"),
-  sample_labeling = "sample_id_rep"
+  sample_labeling    = "sample_id_rep"
+)
+
+# Fixed y-axis across all markers (range driven by largest value)
+scaling_plot(
+  epk                = epk,
+  markers_to_exclude = c("INPUT"),
+  sample_labeling    = "sample_id_rep",
+  facet_scales       = "fixed"
 )
 ```
 
@@ -489,7 +498,7 @@ interactive_heatmap_chromhmm(
 | `create_metadata_df()` | Metadata | `bw_files` or `map_id_vector` | Tibble: project_id, batch, marker, sample_id, replicate, … |
 | `extract_marker_names()` | Metadata | `id`, `markers` | Character vector of marker names |
 | `plot_qc_stats()` | QC | `data` or `epk`, `stats`, `engine`, `sample_labeling`, `ncol` | `ggplot` or `plotly` figure |
-| `scaling_plot()` | QC | `data` or `epk`, `markers_to_exclude`, `sample_labeling` | `ggplot` figure |
+| `scaling_plot()` | QC | `data` or `epk`, `markers_to_exclude`, `sample_labeling`, `facet_scales` | `ggplot` figure |
 | `compute_all_cor()` | Correlation | `epk`, `exp_name`, `method`, `transform` | Updated `EPK`; matrices in `epk$derived$all_cor` |
 | `compute_sample_cor()` | Correlation | `epk`, `method`, `transform` | Updated `EPK`; matrices in `epk$derived$sample_cor` |
 | `heatmap_cor_marker()` | Correlation | `epk`, `exp_name`, `marker` | `ggplot` heatmap |

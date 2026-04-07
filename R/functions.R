@@ -551,18 +551,31 @@ plot_qc_stats <- function(
 #' @param ncol Integer; number of facet columns.
 #' @param sample_labeling Character; column used for x-axis labels. One of
 #'   \code{"sample_id_rep"}, \code{"sample_id"}, or \code{"map_id"}.
+#' @param facet_scales Character; passed to the \code{scales} argument of
+#'   \code{\link[ggplot2]{facet_wrap}}. One of \code{"free_y"} (default),
+#'   \code{"fixed"}, \code{"free_x"}, or \code{"free"}.
+#'   Use \code{"fixed"} to share a common y-axis range across all marker
+#'   facets, with the upper limit driven by the largest value in any marker.
 #'
 #' @return If one condition is selected, returns one ggplot object. If multiple
 #'   conditions are selected, returns a named list of ggplot objects.
 #'
 #' @examples
 #' \dontrun{
+#' # Default: each facet has its own y-axis
 #' p <- scaling_plot(
 #'   epk = epk,
 #'   condition = "All",
 #'   legend_position = "none",
 #'   ncol = 3,
 #'   sample_labeling = "sample_id_rep"
+#' )
+#'
+#' # Fixed y-axis across all markers
+#' p <- scaling_plot(
+#'   epk = epk,
+#'   condition = "All",
+#'   facet_scales = "fixed"
 #' )
 #' p
 #' }
