@@ -582,7 +582,8 @@ scaling_plot <- function(
   save_plots = FALSE,
   save_dir = "",
   ncol = 3,
-  sample_labeling = c("sample_id_rep", "sample_id", "map_id")
+  sample_labeling = c("sample_id_rep", "sample_id", "map_id"),
+  facet_scales = c("free_y", "fixed", "free_x", "free")
 ) {
 
   data <- .resolve_stats_summary_input(
@@ -594,6 +595,7 @@ scaling_plot <- function(
 
   legend_position <- match.arg(legend_position)
   sample_labeling <- match.arg(sample_labeling)
+  facet_scales    <- match.arg(facet_scales)
 
   required_cols <- c("marker", "msr", sample_labeling)
   missing_cols <- setdiff(required_cols, names(data))
@@ -653,7 +655,7 @@ scaling_plot <- function(
         y = "msr"
       ) +
       ggplot2::geom_hline(yintercept = 1) +
-      ggplot2::facet_wrap(~marker, scales = "free_y", ncol = ncol) +
+      ggplot2::facet_wrap(~marker, scales = facet_scales, ncol = ncol) +
       ggplot2::theme(
         axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1),
         legend.position = legend_position
