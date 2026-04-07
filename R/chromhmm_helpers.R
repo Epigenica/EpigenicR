@@ -596,9 +596,11 @@ run_chromhmm_enrichment <- function(
   run_mode = c("parallel", "sequential"),
   n_workers = 0L,
   markers_exclude = c("INPUT"),
-  methylation_markers = c("5mC", "CXXC")
+  methylation_markers = c("5mC", "CXXC"),
+  replicate_type = c("replicate", "pooled")
 ) {
   run_mode <- match.arg(run_mode)
+  replicate_type <- match.arg(replicate_type)
   loci_name <- basename(output_dir)
 
   # All markers from epk, excluding requested and NA
@@ -652,7 +654,8 @@ run_chromhmm_enrichment <- function(
       loci                = loci,
       chromHmm_path       = chromHmm_path,
       chromHMM_annotation = chromHMM_annotation,
-      product             = product
+      product             = product,
+      replicate_type      = replicate_type
     )
 
     jobs <- lapply(markers_needed, function(mk) {
