@@ -16,6 +16,9 @@
 #'   (e.g., "E107_15_coreMarks_hg38lift_mnemonics.bed").
 #' @param product Character; product type ("cNUC" uses unscaled bigWigs;
 #'   others use scaled).
+#' @param replicate_type Character; which replicates to use. One of
+#'   \code{"replicate"} (default, uses non-pooled replicates) or
+#'   \code{"pooled"} (uses pooled files only).
 #'
 #' @return Invisibly returns \code{NULL}. Writes to \code{output_dir}:
 #'   \itemize{
@@ -29,8 +32,8 @@
 #' @details
 #' Generates two outputs:
 #' \enumerate{
-#'   \item \strong{Enrichment profile}: Signal at TSS for pooled replicates.
-#'   \item \strong{Chromatin state distribution}: Mean RPGC per state across replicates.
+#'   \item \strong{Enrichment profile}: Signal at TSS filtered by \code{replicate_type}.
+#'   \item \strong{Chromatin state distribution}: Mean RPGC per state.
 #' }
 #'
 #' Designed for parallel execution via \code{dispatch_chromhmm_jobs()}.
@@ -63,17 +66,31 @@
 #' @export
 run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
                                  output_dir, chromHmm_path, chromHMM_annotation,
-                                 product) {
+                                 product,
+                                 replicate_type = c("replicate", "pooled")) {
+  replicate_type <- match.arg(replicate_type)
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-  # --- enrichment profile ---
-  bw_df_subset <- bw_df |>
-    dplyr::filter(replicate == "pooled") |>
-    dplyr::filter(marker %in% c(mk, "INPUT"))
+  # Filter by replicate_type and marker
+  if (replicate_type == "pooled") {
+    bw_df_subset <- dplyr::filter(bw_df, replicate == "pooled",
+                                  marker %in% c(mk, "INPUT", "Input", "input"))
+  } else {
+    bw_df_subset <- dplyr::filter(bw_df, replicate != "pooled",
+                                  marker %in% c(mk, "INPUT", "Input", "input"))
+  }
+
+  # Filter by scaling type based on product
+  if (product != "cNUC") {
+    bw_df_subset <- dplyr::filter(bw_df_subset, grepl("\\.scaled\\.", bw_file))
+  } else {
+    bw_df_subset <- dplyr::filter(bw_df_subset, grepl("\\.unscaled", bw_file))
+  }
 
   allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
+
   if (length(allfiles) == 0) {
-    message(sprintf("[chromHMM:%s] no pooled bigWig files found in bw_df - skipping enrichment profile.", mk))
+    message(sprintf("[chromHMM:%s] no bigWig files found in bw_df - skipping enrichment profile.", mk))
   } else {
     if (length(unique(bw_df_subset$batch)) > 1) {
       allfiles_name <- paste0(
@@ -121,25 +138,13 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
   }
 
   # --- chromHMM boxplot ---
-  scaling_type <- if (product != "cNUC") "scaled" else "unscaled"
-
-  bw_df_subset <- bw_df |>
-    dplyr::filter(
-      marker %in% c(mk, "INPUT"),
-      scaling == scaling_type,
-      replicate != "pooled"
-    )
-
-  bw_files_sel_path <- file.path(bigwig_dir, bw_df_subset$bw_file)
-  bw_files_sel_name <- paste0(bw_df_subset$sample_id, "_", bw_df_subset$replicate)
-
-  if (length(bw_files_sel_path) == 0) {
-    message(sprintf("[chromHMM:%s] no scaled non-pooled bigWig files found in bw_df - skipping chromHMM boxplot.", mk))
+  if (length(allfiles) == 0) {
+    message(sprintf("[chromHMM:%s] no bigWig files found in bw_df - skipping chromHMM boxplot.", mk))
   } else {
     p_heatmap <- wigglescout::plot_bw_loci_summary_heatmap(
-      bw_files_sel_path,
+      allfiles,
       file.path(chromHmm_path, chromHMM_annotation),
-      labels = bw_files_sel_name,
+      labels = allfiles_name,
       remove_top = 0.01
     )
 
