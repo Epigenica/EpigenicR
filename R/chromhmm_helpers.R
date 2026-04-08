@@ -259,7 +259,9 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
 #' @export
 run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
                                     output_dir, chromHmm_path, chromHMM_annotation,
-                                    product) {
+                                    product,
+                                    replicate_type = c("replicate", "pooled")) {
+  replicate_type <- match.arg(replicate_type)
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
   # --- enrichment profile ---
