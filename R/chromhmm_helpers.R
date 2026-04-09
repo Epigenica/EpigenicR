@@ -71,7 +71,6 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
   replicate_type <- match.arg(replicate_type)
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-  # Filter by replicate_type and marker
   if (replicate_type == "pooled") {
     bw_df_subset <- dplyr::filter(bw_df, replicate == "pooled",
                                   marker %in% c(mk, "INPUT", "Input", "input"))
@@ -80,9 +79,8 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
                                   marker %in% c(mk, "INPUT", "Input", "input"))
   }
 
-  # Filter by scaling type based on product
   if (product != "cNUC") {
-    bw_df_subset <- dplyr::filter(bw_df_subset, grepl("\\.scaled\\.", bw_file))
+    bw_df_subset <- dplyr::filter(bw_df_subset, grepl("\\.scaled\\.", bw_file, perl = TRUE))
   } else {
     bw_df_subset <- dplyr::filter(bw_df_subset, grepl("\\.unscaled", bw_file))
   }
@@ -148,18 +146,8 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
       remove_top = 0.01
     )
 
-    tmp_df <- p_heatmap@data |>
-      dplyr::mutate(sample_rep = stringr::str_split(variable, "_")) |>
-      dplyr::mutate(
-        sample_id = gsub(sapply(sample_rep, `[`, 1), pattern = "\\.", replacement = "_"),
-        replicate = sapply(sample_rep, `[`, 2)
-      ) |>
-      dplyr::select(-sample_rep)
-
-    colnames(tmp_df) <- c(
-      "Chromatin_State", "sample_id_rep", "mean_rpgc_val",
-      "mean_rpgc_text", "sample_id", "replicate"
-    )
+    tmp_df <- p_heatmap@data
+    colnames(tmp_df) <- c("Chromatin_State", "sample_id_rep", "mean_rpgc_val", "mean_rpgc_text")
 
     p_box <- ggplot2::ggplot(tmp_df, ggplot2::aes(x = Chromatin_State, y = mean_rpgc_val)) +
       ggplot2::geom_boxplot() +
@@ -170,7 +158,6 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
         x = "Features",
         y = "RPGC"
       ) +
-      ggplot2::facet_wrap(~sample_id, scales = "free_x") +
       ggplot2::coord_flip()
 
     ggplot2::ggsave(
@@ -264,17 +251,24 @@ run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
   replicate_type <- match.arg(replicate_type)
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-  # --- enrichment profile ---
-  bw_df_subset <- bw_df |>
-    dplyr::filter(replicate == "pooled") |>
-    dplyr::filter(marker %in% c("5mC", "CXXC"))
+  if (replicate_type == "pooled") {
+    bw_df_subset <- dplyr::filter(bw_df, replicate == "pooled",
+                                  marker %in% c(mk, "INPUT", "Input", "input", "CXXC"))
+  } else {
+    bw_df_subset <- dplyr::filter(bw_df, replicate != "pooled",
+                                  marker %in% c(mk, "INPUT", "Input", "input", "CXXC"))
+  }
+
+  if (product != "cNUC") {
+    bw_df_subset <- dplyr::filter(bw_df_subset, grepl("\\.scaled\\.", bw_file, perl = TRUE))
+  } else {
+    bw_df_subset <- dplyr::filter(bw_df_subset, grepl("\\.unscaled", bw_file))
+  }
 
   allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
 
   if (length(allfiles) == 0) {
-    message(sprintf(
-      "[chromHMM:%s] no pooled bigWig files found - skipping enrichment profile.", mk
-    ))
+    message(sprintf("[chromHMM:%s] no pooled bigWig files found - skipping enrichment profile.", mk))
   } else {
     if (length(unique(bw_df_subset$batch)) > 1) {
       allfiles_name <- paste0(
@@ -322,70 +316,46 @@ run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
   }
 
   # --- chromHMM boxplot ---
-  scaling_type <- if (product != "cNUC") "scaled" else "unscaled"
-  bw_df_subset <- dplyr::filter(bw_df, marker %in% "5mC", scaling == scaling_type)
-
-  if (length(unique(bw_df_subset$batch)) > 1) {
-    bw_files_sel_name <- paste0(
-      bw_df_subset$sample_id, "_", bw_df_subset$replicate,
-      "_", bw_df_subset$batch, "_", bw_df_subset$marker
-    )
+  if (length(allfiles) == 0) {
+    message(sprintf("[chromHMM:%s] no bigWig files found in bw_df - skipping chromHMM boxplot.", mk))
   } else {
-    bw_files_sel_name <- paste0(
-      bw_df_subset$sample_id, "_", bw_df_subset$replicate,
-      "_", bw_df_subset$marker
+    p_heatmap <- wigglescout::plot_bw_loci_summary_heatmap(
+      allfiles,
+      file.path(chromHmm_path, chromHMM_annotation),
+      labels = allfiles_name,
+      remove_top = 0.01
+    )
+
+    tmp_df <- p_heatmap@data
+    colnames(tmp_df) <- c("Chromatin_State", "sample_id_rep", "mean_rpgc_val", "mean_rpgc_text")
+
+    p_box <- ggplot2::ggplot(tmp_df, ggplot2::aes(x = Chromatin_State, y = mean_rpgc_val)) +
+      ggplot2::geom_boxplot() +
+      ggplot2::theme_bw() +
+      ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5)) +
+      ggplot2::labs(
+        title = paste0(mk, " coverage per region (mean RPGC)"),
+        x = "Features",
+        y = "RPGC"
+      ) +
+      ggplot2::coord_flip()
+
+    ggplot2::ggsave(
+      file.path(output_dir, paste0(mk, "_chromatin_state_dist.png")),
+      plot = p_box,
+      width = 12,
+      height = 8
+    )
+
+    write.table(
+      tmp_df,
+      file.path(output_dir, paste0(mk, "_chromatin_state_dist.csv")),
+      sep = ",",
+      quote = FALSE,
+      row.names = FALSE,
+      col.names = TRUE
     )
   }
-
-  bw_files_sel_path <- file.path(bigwig_dir, bw_df_subset$bw_file)
-
-  p_heatmap <- wigglescout::plot_bw_loci_summary_heatmap(
-    bw_files_sel_path,
-    file.path(chromHmm_path, chromHMM_annotation),
-    labels = bw_files_sel_name,
-    remove_top = 0.01
-  )
-
-  tmp_df <- p_heatmap@data |>
-    dplyr::mutate(sample_rep = stringr::str_split(variable, "_")) |>
-    dplyr::mutate(
-      sample_id = gsub(sapply(sample_rep, `[`, 1), pattern = "\\.", replacement = "_"),
-      replicate = sapply(sample_rep, `[`, 2)
-    ) |>
-    dplyr::select(-sample_rep)
-
-  colnames(tmp_df) <- c(
-    "Chromatin_State", "sample_id_rep", "mean_rpgc_val",
-    "mean_rpgc_text", "sample_id", "replicate"
-  )
-
-  p_box <- ggplot2::ggplot(tmp_df, ggplot2::aes(x = Chromatin_State, y = mean_rpgc_val)) +
-    ggplot2::geom_boxplot() +
-    ggplot2::theme_bw() +
-    ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5)) +
-    ggplot2::labs(
-      title = paste0(mk, " coverage per region (mean RPGC)"),
-      x = "Features",
-      y = "RPGC"
-    ) +
-    ggplot2::facet_wrap(~sample_id, scales = "free_x") +
-    ggplot2::coord_flip()
-
-  ggplot2::ggsave(
-    file.path(output_dir, paste0(mk, "_chromatin_state_dist.png")),
-    plot = p_box,
-    width = 12,
-    height = 8
-  )
-
-  write.table(
-    tmp_df,
-    file.path(output_dir, paste0(mk, "_chromatin_state_dist.csv")),
-    sep = ",",
-    quote = FALSE,
-    row.names = FALSE,
-    col.names = TRUE
-  )
 
   file.create(file.path(output_dir, ".done"))
   invisible(NULL)
