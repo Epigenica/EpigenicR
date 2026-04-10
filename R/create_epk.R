@@ -317,6 +317,24 @@ create_epk <- function(
     if (!"replicate" %in% names(stats_summary)) {
       stats_summary$replicate <- md$replicate[ord]
     }
+
+    # Fallback: parse map_id directly for rows not matched via bw_metadata
+    # (e.g. INPUT files excluded from bw_files via markers_to_exclude).
+    # msr is intentionally left NA for these rows.
+    unmatched <- is.na(ord)
+    if (any(unmatched)) {
+      m_fb <- stringr::str_match(
+        stats_lookup_id,
+        "^[^_]+_[^_]+_([^_]+)_[^_]+_(.+)_(rep[0-9]+|pooled)\\.[^.]+$"
+      )
+      fill_mk  <- unmatched & is.na(stats_summary$marker)
+      fill_sid <- unmatched & is.na(stats_summary$sample_id)
+      fill_rep <- unmatched & is.na(stats_summary$replicate)
+      if (any(fill_mk))  stats_summary$marker[fill_mk]     <- m_fb[fill_mk,  2]
+      if (any(fill_sid)) stats_summary$sample_id[fill_sid] <- m_fb[fill_sid, 3]
+      if (any(fill_rep)) stats_summary$replicate[fill_rep] <- tolower(m_fb[fill_rep, 4])
+    }
+
     if (!"sample_id_rep" %in% names(stats_summary)) {
       stats_summary$sample_id_rep <- ifelse(
         is.na(stats_summary$sample_id) | is.na(stats_summary$replicate),
