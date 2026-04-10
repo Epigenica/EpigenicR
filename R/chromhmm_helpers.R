@@ -73,16 +73,20 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
 
   if (replicate_type == "pooled") {
     bw_df_subset <- dplyr::filter(bw_df, replicate == "pooled",
-                                  marker %in% c(mk, "INPUT", "Input", "input"))
+                                  marker == mk | tolower(marker) == "input")
   } else {
     bw_df_subset <- dplyr::filter(bw_df, replicate != "pooled",
-                                  marker %in% c(mk, "INPUT", "Input", "input"))
+                                  marker == mk | tolower(marker) == "input")
   }
 
   if (product != "cNUC") {
-    bw_df_subset <- dplyr::filter(bw_df_subset, grepl("\\.scaled\\.", bw_file, perl = TRUE))
+    bw_df_subset <- dplyr::filter(bw_df_subset,
+                                  grepl("\\.scaled\\.", bw_file, perl = TRUE) |
+                                    tolower(marker) == "input")
   } else {
-    bw_df_subset <- dplyr::filter(bw_df_subset, grepl("\\.unscaled", bw_file))
+    bw_df_subset <- dplyr::filter(bw_df_subset,
+                                  grepl("\\.unscaled", bw_file) |
+                                    tolower(marker) == "input")
   }
 
   allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
@@ -253,16 +257,20 @@ run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
 
   if (replicate_type == "pooled") {
     bw_df_subset <- dplyr::filter(bw_df, replicate == "pooled",
-                                  marker %in% c(mk, "INPUT", "Input", "input", "CXXC"))
+                                  marker == mk | marker == "CXXC" | tolower(marker) == "input")
   } else {
     bw_df_subset <- dplyr::filter(bw_df, replicate != "pooled",
-                                  marker %in% c(mk, "INPUT", "Input", "input", "CXXC"))
+                                  marker == mk | marker == "CXXC" | tolower(marker) == "input")
   }
 
   if (product != "cNUC") {
-    bw_df_subset <- dplyr::filter(bw_df_subset, grepl("\\.scaled\\.", bw_file, perl = TRUE))
+    bw_df_subset <- dplyr::filter(bw_df_subset,
+                                  grepl("\\.scaled\\.", bw_file, perl = TRUE) |
+                                    tolower(marker) == "input")
   } else {
-    bw_df_subset <- dplyr::filter(bw_df_subset, grepl("\\.unscaled", bw_file))
+    bw_df_subset <- dplyr::filter(bw_df_subset,
+                                  grepl("\\.unscaled", bw_file) |
+                                    tolower(marker) == "input")
   }
 
   allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
