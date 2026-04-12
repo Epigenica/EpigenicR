@@ -4,7 +4,11 @@
 \alias{.validate_bw_files_in_stats_summary}
 \title{Validate that BigWig files match stats_summary$map_id}
 \usage{
-.validate_bw_files_in_stats_summary(bw_files, stats_summary)
+.validate_bw_files_in_stats_summary(
+  bw_files,
+  stats_summary,
+  replicate_mode = "all"
+)
 }
 \description{
 Validate that BigWig files match stats_summary$map_id

@@ -12,7 +12,8 @@ run_chromhmm_methylation_enrichment(
   output_dir,
   chromHmm_path,
   chromHMM_annotation,
-  product
+  product,
+  replicate_type = c("replicate", "pooled")
 )
 }
 \arguments{

@@ -15,7 +15,8 @@ scaling_plot(
   save_plots = FALSE,
   save_dir = "",
   ncol = 3,
-  sample_labeling = c("sample_id_rep", "sample_id", "map_id")
+  sample_labeling = c("sample_id_rep", "sample_id", "map_id"),
+  facet_scales = c("free_y", "fixed", "free_x", "free")
 )
 }
 \arguments{
@@ -53,6 +54,12 @@ plotting. Default: \code{"INPUT"}.}
 
 \item{sample_labeling}{Character; column used for x-axis labels. One of
 \code{"sample_id_rep"}, \code{"sample_id"}, or \code{"map_id"}.}
+
+\item{facet_scales}{Character; passed to the \code{scales} argument of
+\code{\link[ggplot2]{facet_wrap}}. One of \code{"free_y"} (default),
+\code{"fixed"}, \code{"free_x"}, or \code{"free"}.
+Use \code{"fixed"} to share a common y-axis range across all marker
+facets, with the upper limit driven by the largest value in any marker.}
 }
 \value{
 If one condition is selected, returns one ggplot object. If multiple
@@ -66,12 +73,20 @@ legacy \code{data} input.
 }
 \examples{
 \dontrun{
+# Default: each facet has its own y-axis
 p <- scaling_plot(
   epk = epk,
   condition = "All",
   legend_position = "none",
   ncol = 3,
   sample_labeling = "sample_id_rep"
+)
+
+# Fixed y-axis across all markers
+p <- scaling_plot(
+  epk = epk,
+  condition = "All",
+  facet_scales = "fixed"
 )
 p
 }

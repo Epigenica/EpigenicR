@@ -15,7 +15,8 @@ create_epk(
   sample_metadata = NULL,
   bigwig_scale = c("unscaled", "scaled", "both"),
   replicate_mode = c("all", "pooled", "replicates"),
-  scaling_info_file = NULL
+  scaling_info_file = NULL,
+  label_by = c("sample_id", "sample_id_batch")
 )
 }
 \arguments{

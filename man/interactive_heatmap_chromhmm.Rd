@@ -4,7 +4,7 @@
 \alias{interactive_heatmap_chromhmm}
 \title{Interactive ChromHMM chromatin state heatmap}
 \usage{
-interactive_heatmap_chromhmm(epk, marker, loci)
+interactive_heatmap_chromhmm(epk, marker, loci, show_pooled = FALSE)
 }
 \arguments{
 \item{epk}{An EPK object containing

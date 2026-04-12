@@ -2,6 +2,7 @@
 
 S3method(print,EPK)
 export(add_features_to_epk)
+export(add_results_to_epk)
 export(calculate_beta_val)
 export(compute_all_cor)
 export(compute_sample_cor)

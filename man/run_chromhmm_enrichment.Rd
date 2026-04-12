@@ -16,7 +16,8 @@ run_chromhmm_enrichment(
   run_mode = c("parallel", "sequential"),
   n_workers = 0L,
   markers_exclude = c("INPUT"),
-  methylation_markers = c("5mC", "CXXC")
+  methylation_markers = c("5mC", "CXXC"),
+  replicate_type = c("replicate", "pooled")
 )
 }
 \arguments{

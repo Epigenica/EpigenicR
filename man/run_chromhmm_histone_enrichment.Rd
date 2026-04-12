@@ -12,7 +12,8 @@ run_chromhmm_histone_enrichment(
   output_dir,
   chromHmm_path,
   chromHMM_annotation,
-  product
+  product,
+  replicate_type = c("replicate", "pooled")
 )
 }
 \arguments{
@@ -35,6 +36,10 @@ run_chromhmm_histone_enrichment(
 
 \item{product}{Character; product type ("cNUC" uses unscaled bigWigs;
 others use scaled).}
+
+\item{replicate_type}{Character; which replicates to use. One of
+\code{"replicate"} (default, uses non-pooled replicates) or
+\code{"pooled"} (uses pooled files only).}
 }
 \value{
 Invisibly returns \code{NULL}. Writes to \code{output_dir}:
@@ -54,8 +59,8 @@ ChromHMM annotations. Generates visualization and summary tables.
 \details{
 Generates two outputs:
 \enumerate{
-  \item \strong{Enrichment profile}: Signal at TSS for pooled replicates.
-  \item \strong{Chromatin state distribution}: Mean RPGC per state across replicates.
+  \item \strong{Enrichment profile}: Signal at TSS filtered by \code{replicate_type}.
+  \item \strong{Chromatin state distribution}: Mean RPGC per state.
 }
 
 Designed for parallel execution via \code{dispatch_chromhmm_jobs()}.
