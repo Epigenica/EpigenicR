@@ -61,8 +61,15 @@ add_features_to_epk <- function(
   genome = "hg38",
   markers_to_exclude = c("INPUT"),
   experiment_names = NULL,
+  bigwig_scale = c("unscaled", "scaled", "both"),
+  replicate_mode = c("all", "pooled", "replicates"),
+  scaling_info_file = NULL,
+  label_by = c("sample_id", "sample_id_batch"),
   overwrite = FALSE
 ) {
+  bigwig_scale   <- match.arg(bigwig_scale)
+  replicate_mode <- match.arg(replicate_mode)
+  label_by       <- match.arg(label_by)
   if (is.null(epk) || !is.list(epk) || is.null(epk$mse)) {
     stop("'epk' must be a valid EPK object containing an 'mse' slot.")
   }
@@ -81,14 +88,18 @@ add_features_to_epk <- function(
   }
 
   epk_new <- create_epk(
-    bw_files = bw_files,
-    annotations = annotations,
-    stats_summary = stats_summary,
-    sample_metadata = sample_metadata,
+    bw_files             = bw_files,
+    annotations          = annotations,
+    stats_summary        = stats_summary,
+    sample_metadata      = sample_metadata,
     pipeline_output_path = pipeline_output_path,
-    genome = genome,
-    markers_to_exclude = markers_to_exclude,
-    experiment_names = experiment_names
+    genome               = genome,
+    markers_to_exclude   = markers_to_exclude,
+    experiment_names     = experiment_names,
+    bigwig_scale         = bigwig_scale,
+    replicate_mode       = replicate_mode,
+    scaling_info_file    = scaling_info_file,
+    label_by             = label_by
   )
 
   existing_exps <- MultiAssayExperiment::experiments(epk$mse)
