@@ -36,6 +36,9 @@ run_chromhmm_methylation_enrichment(
 
 \item{product}{Character; product type ("cNUC" uses unscaled bigWigs;
 others use scaled).}
+
+\item{replicate_type}{Character; which replicates to use. One of
+\code{"replicate"} (default) or \code{"pooled"}.}
 }
 \value{
 Invisibly returns \code{NULL}. Writes:

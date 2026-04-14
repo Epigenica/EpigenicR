@@ -14,6 +14,10 @@ add_features_to_epk(
   genome = "hg38",
   markers_to_exclude = c("INPUT"),
   experiment_names = NULL,
+  bigwig_scale = c("unscaled", "scaled", "both"),
+  replicate_mode = c("all", "pooled", "replicates"),
+  scaling_info_file = NULL,
+  label_by = c("sample_id", "sample_id_batch"),
   overwrite = FALSE
 )
 }
@@ -41,6 +45,20 @@ See \\code{create_epk()} for details.}
 \item{markers_to_exclude}{Character vector of marker names to skip.}
 
 \item{experiment_names}{Optional character vector naming added experiments.}
+
+\item{bigwig_scale}{Character; which scaling tier to load. One of
+\\code{"unscaled"}, \\code{"scaled"}, or \\code{"both"} (default \\code{"both"}).
+Passed to \\code{create_epk()}.}
+
+\item{replicate_mode}{Character; which replicates to include. One of
+\\code{"all"} (default), \\code{"pooled"}, or \\code{"replicates"}.
+Passed to \\code{create_epk()}.}
+
+\item{scaling_info_file}{Character; optional path to a scaling info CSV used
+to attach MSR values. Passed to \\code{create_epk()}.}
+
+\item{label_by}{Character; how to label samples. One of \\code{"sample_id"}
+(default) or \\code{"sample_id_batch"}. Passed to \\code{create_epk()}.}
 
 \item{overwrite}{Logical; if \\code{FALSE} (default), stop when experiment names
 already exist in \\code{epk$mse}. If \\code{TRUE}, replace existing experiments.}

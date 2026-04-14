@@ -55,6 +55,10 @@ Defaults to \code{"INPUT"}. \code{NA} values are always dropped.}
 use \code{run_chromhmm_methylation_enrichment} (center-mode profile).
 All other markers use \code{run_chromhmm_histone_enrichment}
 (start-mode profile). Defaults to \code{c("5mC", "CXXC")}.}
+
+\item{replicate_type}{Character; which replicates to use. One of
+\code{"replicate"} (default) or \code{"pooled"}. Passed through to
+the per-marker worker functions.}
 }
 \value{
 The input \code{epk} with results appended:

@@ -203,6 +203,8 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
 #'   (e.g., "E107_15_coreMarks_hg38lift_mnemonics.bed").
 #' @param product Character; product type ("cNUC" uses unscaled bigWigs;
 #'   others use scaled).
+#' @param replicate_type Character; which replicates to use. One of
+#'   \code{"replicate"} (default) or \code{"pooled"}.
 #'
 #' @return Invisibly returns \code{NULL}. Writes:
 #'   \itemize{
@@ -527,6 +529,9 @@ dispatch_chromhmm_jobs <- function(jobs, n_workers) {
 #'   use \code{run_chromhmm_methylation_enrichment} (center-mode profile).
 #'   All other markers use \code{run_chromhmm_histone_enrichment}
 #'   (start-mode profile). Defaults to \code{c("5mC", "CXXC")}.
+#' @param replicate_type Character; which replicates to use. One of
+#'   \code{"replicate"} (default) or \code{"pooled"}. Passed through to
+#'   the per-marker worker functions.
 #'
 #' @return The input \code{epk} with results appended:
 #'   \itemize{
