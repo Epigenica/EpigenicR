@@ -388,7 +388,8 @@ run_chromhmm_histone_enrichment(
   output_dir          = "output/chromhmm/H3K4me3",
   chromHmm_path       = "data/chromHmm_annotations/",
   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-  product             = "cChIP"
+  product             = "genomepro",
+  replicate_type      = "replicate"   # or "pooled"
 )
 ```
 
@@ -413,7 +414,8 @@ run_chromhmm_methylation_enrichment(
   output_dir          = "output/chromhmm/5mC",
   chromHmm_path       = "data/chromHmm_annotations/",
   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-  product             = "cNUC"
+  product             = "genomepro",
+  replicate_type      = "replicate"   # or "pooled"
 )
 ```
 
@@ -437,7 +439,7 @@ jobs <- lapply(markers_to_run, function(mk) {
       output_dir          = op,
       chromHmm_path       = "data/chromHmm_annotations/",
       chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-      product             = "cChIP"
+      product             = "genomepro"
     )
   )
 })
@@ -493,7 +495,7 @@ interactive_heatmap_chromhmm(
 | Function | Category | Key Arguments | Returns / Output |
 |----------|----------|---------------|-----------------|
 | `create_epk()` | EPK creation | `pipeline_output_path` or `bw_files`, `annotations`, `replicate_mode`, `label_by` | `EPK` object |
-| `add_features_to_epk()` | EPK creation | `epk`, `annotations`, `pipeline_output_path` or `bw_files`, `overwrite` | Updated `EPK` |
+| `add_features_to_epk()` | EPK creation | `epk`, `annotations`, `pipeline_output_path` or `bw_files`, `bigwig_scale`, `replicate_mode`, `scaling_info_file`, `label_by`, `overwrite` | Updated `EPK` |
 | `add_results_to_epk()` | Results loading | `epk`, `results_path` | Updated `EPK` with enrichment slots populated |
 | `create_metadata_df()` | Metadata | `bw_files` or `map_id_vector` | Tibble: project_id, batch, marker, sample_id, replicate, … |
 | `extract_marker_names()` | Metadata | `id`, `markers` | Character vector of marker names |
@@ -508,8 +510,9 @@ interactive_heatmap_chromhmm(
 | `interactive_heatmap_chromhmm()` | Visualisation | `epk`, `marker`, `loci`, `show_pooled` | `plotly` heatmap |
 | `ensure_gtf_and_beds()` | Annotations | `gtf_file`, `gtf_url`, `genes_bed`, `tss2k_bed` | BED files written to disk |
 | `download_chromhmm_annotations()` | Annotations | `annotations`, `dest_dir` | BED files written to disk |
-| `run_chromhmm_histone_enrichment()` | ChromHMM | `bw_df`, `mk`, `loci`, `output_dir`, `chromHMM_annotation`, `product` | PNG + CSV files per marker |
-| `run_chromhmm_methylation_enrichment()` | ChromHMM | `bw_df`, `mk`, `loci`, `output_dir`, `chromHMM_annotation`, `product` | PNG + CSV files per marker |
+| `run_chromhmm_enrichment()` | ChromHMM | `epk`, `bw_df`, `loci`, `output_dir`, `chromHMM_annotation`, `product`, `run_mode`, `replicate_type` | Updated `EPK` with enrichment results |
+| `run_chromhmm_histone_enrichment()` | ChromHMM | `bw_df`, `mk`, `loci`, `output_dir`, `chromHMM_annotation`, `product`, `replicate_type` | PNG + CSV files per marker |
+| `run_chromhmm_methylation_enrichment()` | ChromHMM | `bw_df`, `mk`, `loci`, `output_dir`, `chromHMM_annotation`, `product`, `replicate_type` | PNG + CSV files per marker |
 | `dispatch_chromhmm_jobs()` | ChromHMM | `jobs`, `n_workers` | Runs jobs in parallel; files written by workers |
 | `print.EPK()` | Utility | `x` | Console summary of EPK slots and dimensions |
 
