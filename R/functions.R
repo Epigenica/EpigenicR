@@ -34,7 +34,7 @@ plot_beta_density <- function(epk,
     dfs[["raw"]] <- df_raw
   }
   if (method %in% c("quantile", "both")) {
-    if (!assay_qn %in% names(SummaraturExperiment::assays(se))) {
+    if (!assay_qn %in% names(SummarizedExperiment::assays(se))) {
       stop(sprintf("Assay '%s' not found in experiment '%s'", assay_qn, feature))
     }
     df_qn <- as.data.frame(SummarizedExperiment::assay(se, assay_qn)) %>%
