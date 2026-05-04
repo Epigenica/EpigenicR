@@ -33,6 +33,14 @@
 #' @param markers_to_exclude Character vector of marker names to skip
 #'   (default \code{c("INPUT")}). Useful for excluding control tracks.
 #'
+#' @param markers_to_include Character vector of marker names to process.
+#'   When \code{NULL} (default) all markers detected after applying
+#'   \code{markers_to_exclude} are used. When provided, only the listed markers
+#'   are processed; an error is raised if any name is not present in the
+#'   detected marker set. Use this when auto-detection picks up spurious tokens
+#'   from non-standard filenames, or when you want to restrict processing to a
+#'   known subset without relying on \code{markers_to_exclude}.
+#'
 #' @param experiment_names Character vector naming the experiments. If a single
 #'   annotation is provided, defaults to \code{"protein_coding"}. If a named list
 #'   of annotations is provided, uses the list names.
@@ -162,6 +170,7 @@ create_epk <- function(
   pipeline_output_path = NULL,
   genome = "hg38",
   markers_to_exclude = c("INPUT"),
+  markers_to_include = NULL,
   experiment_names = NULL,
   sample_metadata = NULL,
   bigwig_scale = c("unscaled", "scaled", "both"),
@@ -545,8 +554,20 @@ create_epk <- function(
   # Determine unique markers to process
   unique_markers <- setdiff(unique(bw_metadata$marker), markers_to_exclude)
   unique_markers <- unique_markers[!is.na(unique_markers) & unique_markers != ""]
+
+  if (!is.null(markers_to_include)) {
+    unknown <- setdiff(markers_to_include, unique_markers)
+    if (length(unknown) > 0) {
+      stop(
+        "'markers_to_include' contains marker(s) not found in bw_files after exclusions: ",
+        paste(unknown, collapse = ", ")
+      )
+    }
+    unique_markers <- markers_to_include
+  }
+
   if (length(unique_markers) == 0) {
-    stop("No markers to process after exclusions. Check 'markers_to_exclude' and metadata.")
+    stop("No markers to process after exclusions. Check 'markers_to_exclude' and/or 'markers_to_include'.")
   }
   message("Processing markers: ", paste(unique_markers, collapse = ", "))
 
@@ -950,29 +971,37 @@ create_epk <- function(
       next
     }
 
-    # Extract marker
+    # Extract marker (case-insensitive match; store the casing as it appears in
+    # the filename so downstream comparisons work without normalisation).
     for (marker in known_markers) {
-      if (grepl(marker, filename, fixed = TRUE)) {
-        metadata$marker[i] <- marker
+      m <- regexpr(marker, filename, ignore.case = TRUE, perl = TRUE)
+      if (m > 0) {
+        metadata$marker[i] <- regmatches(filename, m)
         break
       }
     }
 
-    # Fallback: infer marker as the third underscore-delimited token.
-    if (is.na(metadata$marker[i]) && grepl("^[^_]+_[^_]+_[^_]+_", filename)) {
-      metadata$marker[i] <- sub("^[^_]+_[^_]+_([^_]+)_.*$", "\\1", filename)
+    # Fallback: infer marker as the second underscore-delimited token.
+    # For {project}_{marker}_{sample}_{replicate} style names this is correct.
+    if (is.na(metadata$marker[i]) && grepl("^[^_]+_[^_]+_", filename)) {
+      metadata$marker[i] <- sub("^[^_]+_([^_]+)_.*$", "\\1", filename)
     }
 
-    # Extract sample_id (simple heuristic: look for SAMPLE-XXXX pattern)
-    sample_match <- regmatches(
-      filename,
-      gregexpr("SAMPLE-[0-9]+", filename)
-    )
+    # Extract sample_id: prefer SAMPLE-XXXX pattern, then the token immediately
+    # before _{replicate} (pooled|rep\d+), then fall back to the first token.
+    sample_match <- regmatches(filename, gregexpr("SAMPLE-[0-9]+", filename))
     if (length(sample_match[[1]]) > 0) {
       metadata$sample_id[i] <- sample_match[[1]][1]
     } else {
-      # Fallback: use first part of filename
-      metadata$sample_id[i] <- sub("_.*", "", filename)
+      pre_rep <- regmatches(
+        filename,
+        regexec("_([^_]+)_(pooled|rep[0-9]+)\\.", filename, ignore.case = TRUE, perl = TRUE)
+      )[[1]]
+      if (length(pre_rep) > 1) {
+        metadata$sample_id[i] <- pre_rep[2]
+      } else {
+        metadata$sample_id[i] <- sub("_.*", "", filename)
+      }
     }
 
     # Extract replicate (rep1, rep2, pooled, etc.)
