@@ -11,6 +11,7 @@ create_epk(
   pipeline_output_path = NULL,
   genome = "hg38",
   markers_to_exclude = c("INPUT"),
+  markers_to_include = NULL,
   experiment_names = NULL,
   sample_metadata = NULL,
   bigwig_scale = c("unscaled", "scaled", "both"),
@@ -46,6 +47,14 @@ Used for validation and metadata.}
 
 \item{markers_to_exclude}{Character vector of marker names to skip
 (default \code{c("INPUT")}). Useful for excluding control tracks.}
+
+\item{markers_to_include}{Character vector of marker names to process.
+When \code{NULL} (default) all markers detected after applying
+\code{markers_to_exclude} are used. When provided, only the listed markers
+are processed; an error is raised if any name is not present in the
+detected marker set. Use this when auto-detection picks up spurious tokens
+from non-standard filenames, or when you want to restrict processing to a
+known subset without relying on \code{markers_to_exclude}.}
 
 \item{experiment_names}{Character vector naming the experiments. If a single
 annotation is provided, defaults to \code{"protein_coding"}. If a named list
