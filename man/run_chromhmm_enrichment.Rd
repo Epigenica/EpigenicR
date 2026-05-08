@@ -17,7 +17,8 @@ run_chromhmm_enrichment(
   n_workers = 0L,
   markers_exclude = c("INPUT"),
   methylation_markers = c("5mC", "CXXC"),
-  replicate_type = c("replicate", "pooled")
+  replicate_type = c("replicate", "pooled"),
+  plot_bw_profile_mode = c("start", "stretch", "end", "center")
 )
 }
 \arguments{
@@ -59,6 +60,12 @@ All other markers use \code{run_chromhmm_histone_enrichment}
 \item{replicate_type}{Character; which replicates to use. One of
 \code{"replicate"} (default) or \code{"pooled"}. Passed through to
 the per-marker worker functions.}
+
+\item{plot_bw_profile_mode}{Character; anchoring mode for histone enrichment
+profiles. One of \code{"start"} (default), \code{"stretch"},
+\code{"end"}, or \code{"center"}. Passed to
+\code{run_chromhmm_histone_enrichment}; methylation markers always use
+\code{"center"} regardless of this setting.}
 }
 \value{
 The input \code{epk} with results appended:

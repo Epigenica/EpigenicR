@@ -13,7 +13,8 @@ run_chromhmm_histone_enrichment(
   chromHmm_path,
   chromHMM_annotation,
   product,
-  replicate_type = c("replicate", "pooled")
+  replicate_type = c("replicate", "pooled"),
+  plot_bw_profile_mode = c("start", "stretch", "end", "center")
 )
 }
 \arguments{
@@ -40,12 +41,16 @@ others use scaled).}
 \item{replicate_type}{Character; which replicates to use. One of
 \code{"replicate"} (default, uses non-pooled replicates) or
 \code{"pooled"} (uses pooled files only).}
+
+\item{plot_bw_profile_mode}{Character; anchoring mode passed to
+\code{wigglescout::plot_bw_profile}. One of \code{"start"} (default),
+\code{"stretch"}, \code{"end"}, or \code{"center"}.}
 }
 \value{
 Invisibly returns \code{NULL}. Writes to \code{output_dir}:
   \itemize{
-    \item PNG: enrichment profile plot (\code{<marker>_profile_start.png})
-    \item CSV: profile data (\code{<marker>_profile_start_data.csv})
+    \item PNG: enrichment profile plot (\code{<marker>_profile_<mode>.png})
+    \item CSV: profile data (\code{<marker>_profile_<mode>_data.csv})
     \item PNG: chromatin state distribution (\code{<marker>_chromatin_state_dist.png})
     \item CSV: chromatin state summary (\code{<marker>_chromatin_state_dist.csv})
     \item Sentinel file: \code{.done} written on successful completion

@@ -19,11 +19,14 @@
 #' @param replicate_type Character; which replicates to use. One of
 #'   \code{"replicate"} (default, uses non-pooled replicates) or
 #'   \code{"pooled"} (uses pooled files only).
+#' @param plot_bw_profile_mode Character; anchoring mode passed to
+#'   \code{wigglescout::plot_bw_profile}. One of \code{"start"} (default),
+#'   \code{"stretch"}, \code{"end"}, or \code{"center"}.
 #'
 #' @return Invisibly returns \code{NULL}. Writes to \code{output_dir}:
 #'   \itemize{
-#'     \item PNG: enrichment profile plot (\code{<marker>_profile_start.png})
-#'     \item CSV: profile data (\code{<marker>_profile_start_data.csv})
+#'     \item PNG: enrichment profile plot (\code{<marker>_profile_<mode>.png})
+#'     \item CSV: profile data (\code{<marker>_profile_<mode>_data.csv})
 #'     \item PNG: chromatin state distribution (\code{<marker>_chromatin_state_dist.png})
 #'     \item CSV: chromatin state summary (\code{<marker>_chromatin_state_dist.csv})
 #'     \item Sentinel file: \code{.done} written on successful completion
@@ -67,8 +70,10 @@
 run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
                                  output_dir, chromHmm_path, chromHMM_annotation,
                                  product,
-                                 replicate_type = c("replicate", "pooled")) {
-  replicate_type <- match.arg(replicate_type)
+                                 replicate_type = c("replicate", "pooled"),
+                                 plot_bw_profile_mode = c("start", "stretch", "end", "center")) {
+  replicate_type       <- match.arg(replicate_type)
+  plot_bw_profile_mode <- match.arg(plot_bw_profile_mode)
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
   if (replicate_type == "pooled") {
@@ -109,7 +114,7 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
     p_enrich <- wigglescout::plot_bw_profile(
       allfiles,
       loci = loci,
-      mode = "start",
+      mode = plot_bw_profile_mode,
       labels = allfiles_name
     )
 
@@ -122,16 +127,18 @@ run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
         legend.title = ggplot2::element_blank()
       )
 
-    ggplot2::ggsave(
-      file.path(output_dir, paste0(mk, "_profile_start.png")),
-      plot = p_enrich,
-      width = 12,
-      height = 8
+    profile_png <- file.path(
+      output_dir, paste0(mk, "_profile_", plot_bw_profile_mode, ".png")
     )
+    ggplot2::ggsave(profile_png, plot = p_enrich, width = 12, height = 8)
 
+    profile_csv <- file.path(
+      output_dir,
+      paste0(mk, "_profile_", plot_bw_profile_mode, "_data.csv")
+    )
     write.table(
       p_enrich$data,
-      file.path(output_dir, paste0(mk, "_profile_start_data.csv")),
+      profile_csv,
       row.names = FALSE,
       quote = FALSE,
       col.names = TRUE,
@@ -532,6 +539,11 @@ dispatch_chromhmm_jobs <- function(jobs, n_workers) {
 #' @param replicate_type Character; which replicates to use. One of
 #'   \code{"replicate"} (default) or \code{"pooled"}. Passed through to
 #'   the per-marker worker functions.
+#' @param plot_bw_profile_mode Character; anchoring mode for histone enrichment
+#'   profiles. One of \code{"start"} (default), \code{"stretch"},
+#'   \code{"end"}, or \code{"center"}. Passed to
+#'   \code{run_chromhmm_histone_enrichment}; methylation markers always use
+#'   \code{"center"} regardless of this setting.
 #'
 #' @return The input \code{epk} with results appended:
 #'   \itemize{
@@ -582,10 +594,12 @@ run_chromhmm_enrichment <- function(
   n_workers = 0L,
   markers_exclude = c("INPUT"),
   methylation_markers = c("5mC", "CXXC"),
-  replicate_type = c("replicate", "pooled")
+  replicate_type = c("replicate", "pooled"),
+  plot_bw_profile_mode = c("start", "stretch", "end", "center")
 ) {
-  run_mode <- match.arg(run_mode)
-  replicate_type <- match.arg(replicate_type)
+  run_mode             <- match.arg(run_mode)
+  replicate_type       <- match.arg(replicate_type)
+  plot_bw_profile_mode <- match.arg(plot_bw_profile_mode)
   loci_name <- basename(output_dir)
 
   # All markers from epk, excluding requested and NA
@@ -600,13 +614,9 @@ run_chromhmm_enrichment <- function(
 
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-  # Expected sentinel + output files per marker. For methylation markers, profile is "center"; for others, "start".
   .expected_files <- function(op, mk) {
-    profile_file <- if (mk %in% methylation_markers) {
-      paste0(mk, "_profile_center.png")
-    } else {
-      paste0(mk, "_profile_start.png")
-    }
+    mode <- if (mk %in% methylation_markers) "center" else plot_bw_profile_mode
+    profile_file <- paste0(mk, "_profile_", mode, ".png")
     c(
       file.path(op, profile_file),
       file.path(op, paste0(mk, "_chromatin_state_dist.png")),
@@ -646,15 +656,21 @@ run_chromhmm_enrichment <- function(
     jobs <- lapply(markers_needed, function(mk) {
       op <- file.path(output_dir, mk)
       dir.create(op, recursive = TRUE, showWarnings = FALSE)
-      worker_fn <- if (mk %in% methylation_markers) {
+      is_methyl <- mk %in% methylation_markers
+      worker_fn <- if (is_methyl) {
         run_chromhmm_methylation_enrichment
       } else {
         run_chromhmm_histone_enrichment
       }
+      extra <- if (!is_methyl) {
+        list(plot_bw_profile_mode = plot_bw_profile_mode)
+      } else {
+        list()
+      }
       list(
         fn   = worker_fn,
         mk   = mk,
-        args = c(list(mk = mk, output_dir = op), common_args)
+        args = c(list(mk = mk, output_dir = op), common_args, extra)
       )
     })
 
@@ -680,7 +696,7 @@ run_chromhmm_enrichment <- function(
   )
   files_profile <- list.files(
     output_dir,
-    pattern = ".*(profile_start_data|profile_center_data)\\.csv$",
+    pattern = ".*_profile_[a-z]+_data\\.csv$",
     full.names = TRUE, recursive = TRUE
   )
 
