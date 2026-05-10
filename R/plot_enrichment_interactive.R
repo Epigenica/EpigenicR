@@ -21,7 +21,10 @@
 #' @param highlight_opacity Numeric in [0,1]; opacity applied to non-hovered
 #'   traces. Default: \code{0.5}.
 #' @param mid_coord Character; reference point used for center label and x-axis
-#'   title. One of \code{"center"} or \code{"start"}. Default:
+#'   title. One of \code{"center"}, \code{"start"}, or \code{"stretch"}.
+#'   \code{"stretch"} mode places tick marks at the upstream flank boundary,
+#'   the feature start, the feature end, and the downstream flank boundary,
+#'   with two dashed vertical lines marking start and end. Default:
 #'   \code{"center"}.
 #' @param plot_title Character; title for the plot. Default:
 #'   \code{"Enrichment Profile"}.
@@ -90,7 +93,7 @@ plot_enrichment_interactive <- function(
     bin_size = 100,
     window_bp = 2500,
     highlight_opacity = 0.5,
-    mid_coord = c("center", "start"),
+    mid_coord = c("center", "start", "stretch"),
     plot_title = "Enrichment Profile",
     control_samples = NULL,
     control_pattern = NULL,
@@ -318,9 +321,45 @@ plot_enrichment_interactive <- function(
 
   dfk <- plotly::highlight_key(df2, ~sample)
 
-  window_kb   <- formatC(window_bp / 1000, format = "fg", digits = 3)
-  x_tick_vals <- c(-window_bp, 0, window_bp)
-  x_tick_text <- c(paste0("-", window_kb, " kb"), mid_coord, paste0("+", window_kb, " kb"))
+  window_kb <- formatC(window_bp / 1000, format = "fg", digits = 3)
+
+  if (mid_coord == "stretch") {
+    n_flank_bins <- round(window_bp / bin_size)
+    max_idx      <- max(df2$index)
+    if (max_idx <= 2 * n_flank_bins) {
+      stop(
+        "'stretch' mode requires more bins than 2 * (window_bp / bin_size). ",
+        "Got max index ", max_idx, " but need > ", 2 * n_flank_bins, "."
+      )
+    }
+    start_pos_bp <- -window_bp + n_flank_bins * bin_size
+    end_pos_bp   <- -window_bp + (max_idx - n_flank_bins - 1) * bin_size
+
+    x_tick_vals  <- c(-window_bp, start_pos_bp, end_pos_bp, end_pos_bp + window_bp)
+    x_tick_text  <- c(paste0("-", window_kb, " kb"), "start", "end", paste0("+", window_kb, " kb"))
+    x_axis_title <- "Genomic position (body-scaled)"
+    plot_shapes  <- list(
+      list(
+        type = "line", x0 = start_pos_bp, x1 = start_pos_bp, y0 = 0, y1 = 1,
+        yref = "paper",
+        line = list(color = "rgba(100,100,100,0.8)", dash = "dash", width = 1)
+      ),
+      list(
+        type = "line", x0 = end_pos_bp, x1 = end_pos_bp, y0 = 0, y1 = 1,
+        yref = "paper",
+        line = list(color = "rgba(100,100,100,0.8)", dash = "dash", width = 1)
+      )
+    )
+  } else {
+    x_tick_vals  <- c(-window_bp, 0, window_bp)
+    x_tick_text  <- c(paste0("-", window_kb, " kb"), mid_coord, paste0("+", window_kb, " kb"))
+    x_axis_title <- paste0("Distance from ", mid_coord, " (bp)")
+    plot_shapes  <- list(list(
+      type = "line", x0 = 0, x1 = 0, y0 = 0, y1 = 1,
+      yref = "paper",
+      line = list(color = "rgba(100,100,100,0.8)", dash = "dash", width = 1)
+    ))
+  }
 
   if (!is.null(group_by)) {
     p <- plotly::plot_ly(
@@ -346,17 +385,13 @@ plot_enrichment_interactive <- function(
       showlegend = FALSE,
       title = plot_title,
       xaxis = list(
-        title    = paste0("Distance from ", mid_coord, " (bp)"),
+        title    = x_axis_title,
         tickmode = "array",
         tickvals = x_tick_vals,
         ticktext = x_tick_text
       ),
       yaxis  = list(title = "Mean signal"),
-      shapes = list(list(
-        type = "line", x0 = 0, x1 = 0, y0 = 0, y1 = 1,
-        yref = "paper",
-        line = list(color = "rgba(100,100,100,0.8)", dash = "dash", width = 1)
-      ))
+      shapes = plot_shapes
     ) |>
     plotly::highlight(
       on         = "plotly_hover",
