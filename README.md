@@ -160,6 +160,22 @@ names(MultiAssayExperiment::experiments(epk_multi$mse))
 # [1] "genes" "cpg_islands" "enhancers"
 ```
 
+#### Restrict to specific markers
+
+Use `markers_to_include` to process only a named subset of the markers detected in the BigWig files.
+This filter is applied after `markers_to_exclude`.
+
+```r
+epk <- create_epk(
+  pipeline_output_path = toy_dir,
+  annotations          = toy_genes,
+  markers_to_include   = c("H3K4me3", "H3K27me3"),   # only these two
+  markers_to_exclude   = c("INPUT"),
+  bigwig_scale         = "scaled",
+  replicate_mode       = "replicates"
+)
+```
+
 #### Include batch in column labels
 
 When samples come from multiple batches, set `label_by = "sample_id_batch"` to append
@@ -211,7 +227,36 @@ Use `overwrite = TRUE` to replace an existing experiment by name.
 
 ---
 
-### 3. Extract Metadata from BigWig Files
+### 3. Add New Marker Assays to an Existing EPK
+
+`add_marker_to_epk()` adds new marker assays (e.g. a newly processed histone mark) to every
+experiment already in the EPK. Unlike `add_features_to_epk()` which adds new annotation sets
+(row dimension), this function adds new assays within existing experiments (column dimension
+stays fixed).
+
+```r
+# EPK already contains H3K27me3, H3K4me3, H3K9me3.
+# Add H3K27ac from a separate set of BigWig files:
+epk <- add_marker_to_epk(
+  epk                = epk,
+  bw_files           = bw_files_h3k27ac,
+  stats_summary      = stats_summary,
+  markers_to_include = c("H3K27ac"),
+  markers_to_exclude = c("INPUT"),
+  bigwig_scale       = "scaled",
+  replicate_mode     = "replicates"
+)
+
+# Verify the new assay is present
+SummarizedExperiment::assayNames(epk$mse[["genes"]])
+# [1] "H3K27me3" "H3K4me3" "H3K9me3" "H3K27ac"
+```
+
+Use `overwrite = TRUE` to replace an assay that already exists by name.
+
+---
+
+### 4. Extract Metadata from BigWig Files
 
 `create_metadata_df()` parses the EpiFinder naming convention
 (`PROJECT_BATCH_MARKER_RERUN_SAMPLE_REPLICATE.GENOME.SCALING.bw`) into structured columns.
@@ -236,7 +281,7 @@ metadata <- create_metadata_df(bw_files = bw_files)
 
 ---
 
-### 4. QC Plots
+### 5. QC Plots
 
 `plot_qc_stats()` generates per-marker boxplots with jittered sample points for any numeric
 column in a `stats_summary` data frame.
@@ -289,7 +334,7 @@ scaling_plot(
 
 ---
 
-### 5. Compute Sample Correlations
+### 6. Compute Sample Correlations
 
 ```r
 # Correlations for all markers in one experiment
@@ -306,7 +351,7 @@ heatmap_cor_marker(epk, exp_name = "genes", marker = "H3K4me3")
 
 ---
 
-### 6. Beta Value Calculation (Methylation)
+### 7. Beta Value Calculation (Methylation)
 
 For MBD-seq/CXXC products, `calculate_beta_val()` computes beta values from the
 `mbdseq` (M2) and `cxxc` (M3) assays using `(M2 + p) / (M2 + M3 + 2p)`.
@@ -329,7 +374,7 @@ plot_beta_density(
 
 ---
 
-### 7. Interactive Enrichment Profile
+### 8. Interactive Enrichment Profile
 
 `plot_enrichment_interactive()` renders a multi-sample enrichment profile as an interactive
 plotly figure with hover highlighting.
@@ -337,6 +382,7 @@ plotly figure with hover highlighting.
 ```r
 data(profile_results)
 
+# TSS-anchored profile
 plot_enrichment_interactive(
   df          = profile_results$H3K4me3$protein_coding,
   marker      = "H3K4me3",
@@ -344,11 +390,23 @@ plot_enrichment_interactive(
   mid_coord   = "start",
   group_by    = "sample_id"
 )
+
+# Gene-body-scaled profile (stretch mode)
+# Requires profile data generated with plot_bw_profile_mode = "stretch"
+plot_enrichment_interactive(
+  epk       = epk,
+  marker    = "H3K4me3",
+  loci      = "protein_coding",
+  mid_coord = "stretch"   # 4-tick x-axis: -Xkb | start | end | +Xkb
+)
 ```
+
+`mid_coord = "stretch"` derives the TSS and TES tick positions from `window_bp / bin_size`
+and `max(index)` in the profile data — no extra arguments needed.
 
 ---
 
-### 8. Download Genomic Annotations
+### 9. Download Genomic Annotations
 
 ```r
 # Download GTF and create gene / TSS BED files
@@ -369,7 +427,7 @@ download_chromhmm_annotations(
 
 ---
 
-### 9. ChromHMM Enrichment Analysis
+### 10. ChromHMM Enrichment Analysis
 
 Compute enrichment profiles and chromatin state distributions for each marker. Two
 specialised functions handle histone marks and methylation respectively;
@@ -381,15 +439,34 @@ specialised functions handle histone marks and methylation respectively;
 loci_gr <- readRDS("data/genes_protein_coding_gr.rds")
 
 run_chromhmm_histone_enrichment(
-  bw_df               = bw_df,
-  bigwig_dir          = "minute_output/bigwig/",
-  mk                  = "H3K4me3",
-  loci                = loci_gr,
-  output_dir          = "output/chromhmm/H3K4me3",
-  chromHmm_path       = "data/chromHmm_annotations/",
-  chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-  product             = "genomepro",
-  replicate_type      = "replicate"   # or "pooled"
+  bw_df                = bw_df,
+  bigwig_dir           = "minute_output/bigwig/",
+  mk                   = "H3K4me3",
+  loci                 = loci_gr,
+  output_dir           = "output/chromhmm/H3K4me3",
+  chromHmm_path        = "data/chromHmm_annotations/",
+  chromHMM_annotation  = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+  product              = "genomepro",
+  replicate_type       = "replicate",    # or "pooled"
+  plot_bw_profile_mode = "start"         # "start", "end", "center", or "stretch"
+)
+```
+
+`plot_bw_profile_mode` controls the reference point and x-axis layout of the enrichment
+profile plot. Use `"stretch"` for gene-body-scaled profiles with TSS and TES anchors.
+Pass the same argument to `run_chromhmm_enrichment()` and it is forwarded automatically
+to each histone worker (methylation always uses `"center"`).
+
+```r
+# Gene-body-scaled profile via run_chromhmm_enrichment
+epk <- run_chromhmm_enrichment(
+  epk                  = epk,
+  bw_df                = bw_df,
+  loci                 = loci_gr,
+  output_dir           = "output/chromhmm/protein_coding",
+  chromHMM_annotation  = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+  product              = "genomepro",
+  plot_bw_profile_mode = "stretch"
 )
 ```
 
@@ -397,8 +474,8 @@ Output files per marker:
 
 | File | Description |
 |------|-------------|
-| `<marker>_profile_start.png` | Enrichment profile at TSS |
-| `<marker>_profile_start_data.csv` | Profile data table |
+| `<marker>_profile_<mode>.png` | Enrichment profile (mode = start / end / center / stretch) |
+| `<marker>_profile_<mode>_data.csv` | Profile data table |
 | `<marker>_chromatin_state_dist.png` | Chromatin state distribution boxplot |
 | `<marker>_chromatin_state_dist.csv` | State distribution table |
 | `.done` | Completion sentinel |
@@ -455,7 +532,7 @@ dispatch_chromhmm_jobs(jobs, n_workers = n_workers)
 
 ---
 
-### 10. Load Pre-computed Results into EPK
+### 11. Load Pre-computed Results into EPK
 
 After ChromHMM runs complete, `add_results_to_epk()` reads the output CSVs and stores
 them in `epk$enrichment_results`.
@@ -494,8 +571,9 @@ interactive_heatmap_chromhmm(
 
 | Function | Category | Key Arguments | Returns / Output |
 |----------|----------|---------------|-----------------|
-| `create_epk()` | EPK creation | `pipeline_output_path` or `bw_files`, `annotations`, `replicate_mode`, `label_by` | `EPK` object |
+| `create_epk()` | EPK creation | `pipeline_output_path` or `bw_files`, `annotations`, `markers_to_include`, `markers_to_exclude`, `replicate_mode`, `label_by` | `EPK` object |
 | `add_features_to_epk()` | EPK creation | `epk`, `annotations`, `pipeline_output_path` or `bw_files`, `bigwig_scale`, `replicate_mode`, `scaling_info_file`, `label_by`, `overwrite` | Updated `EPK` |
+| `add_marker_to_epk()` | EPK creation | `epk`, `bw_files` or `pipeline_output_path`, `markers_to_include`, `markers_to_exclude`, `bigwig_scale`, `replicate_mode`, `overwrite` | Updated `EPK` with new assays |
 | `add_results_to_epk()` | Results loading | `epk`, `results_path` | Updated `EPK` with enrichment slots populated |
 | `create_metadata_df()` | Metadata | `bw_files` or `map_id_vector` | Tibble: project_id, batch, marker, sample_id, replicate, … |
 | `extract_marker_names()` | Metadata | `id`, `markers` | Character vector of marker names |
@@ -506,12 +584,12 @@ interactive_heatmap_chromhmm(
 | `heatmap_cor_marker()` | Correlation | `epk`, `exp_name`, `marker` | `ggplot` heatmap |
 | `calculate_beta_val()` | Methylation | `epk`, `feature`, `pseudocount`, `method` | Updated `EPK` with beta assays added |
 | `plot_beta_density()` | Methylation | `epk`, `feature`, `method` | `ggplot` density figure |
-| `plot_enrichment_interactive()` | Visualisation | `df` or `epk`, `marker`, `loci`, `mid_coord`, `group_by` | `plotly` figure |
+| `plot_enrichment_interactive()` | Visualisation | `df` or `epk`, `marker`, `loci`, `mid_coord` (`"center"` / `"start"` / `"stretch"`), `group_by` | `plotly` figure |
 | `interactive_heatmap_chromhmm()` | Visualisation | `epk`, `marker`, `loci`, `show_pooled` | `plotly` heatmap |
 | `ensure_gtf_and_beds()` | Annotations | `gtf_file`, `gtf_url`, `genes_bed`, `tss2k_bed` | BED files written to disk |
 | `download_chromhmm_annotations()` | Annotations | `annotations`, `dest_dir` | BED files written to disk |
-| `run_chromhmm_enrichment()` | ChromHMM | `epk`, `bw_df`, `loci`, `output_dir`, `chromHMM_annotation`, `product`, `run_mode`, `replicate_type` | Updated `EPK` with enrichment results |
-| `run_chromhmm_histone_enrichment()` | ChromHMM | `bw_df`, `mk`, `loci`, `output_dir`, `chromHMM_annotation`, `product`, `replicate_type` | PNG + CSV files per marker |
+| `run_chromhmm_enrichment()` | ChromHMM | `epk`, `bw_df`, `loci`, `output_dir`, `chromHMM_annotation`, `product`, `run_mode`, `replicate_type`, `plot_bw_profile_mode` | Updated `EPK` with enrichment results |
+| `run_chromhmm_histone_enrichment()` | ChromHMM | `bw_df`, `mk`, `loci`, `output_dir`, `chromHMM_annotation`, `product`, `replicate_type`, `plot_bw_profile_mode` | PNG + CSV files per marker |
 | `run_chromhmm_methylation_enrichment()` | ChromHMM | `bw_df`, `mk`, `loci`, `output_dir`, `chromHMM_annotation`, `product`, `replicate_type` | PNG + CSV files per marker |
 | `dispatch_chromhmm_jobs()` | ChromHMM | `jobs`, `n_workers` | Runs jobs in parallel; files written by workers |
 | `print.EPK()` | Utility | `x` | Console summary of EPK slots and dimensions |
