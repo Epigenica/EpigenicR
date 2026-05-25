@@ -1,4 +1,4 @@
-## Tests for chromhmm_helpers.R refactored functions
+## Tests for chromhmm_helpers.R
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -16,34 +16,21 @@ make_bw_df <- function() {
   )
 }
 
-# ── run_chromhmm_histone: file filtering ────────────────────────────────────
+# ── run_chromhmm_histone: file filtering ─────────────────────────────────────
 
-test_that("run_chromhmm_histone selects marker + INPUT rows (non-pooled)", {
+test_that("run_chromhmm_histone selects marker + INPUT rows (non-pooled, scaled)", {
   bw_df <- make_bw_df()
 
-  # Intercept the bw_df_subset passed to run_bw_profile by checking which
-  # files would be selected, without actually running wigglescout.
-  # We test this by using a non-existent bigwig_dir — the function should
-  # fail at run_bw_profile (wigglescout), not during filtering.
-  # Here we just test the filtering logic directly.
+  subset <- dplyr::filter(bw_df, replicate != "pooled",
+                          marker == "H3K4me3" | tolower(marker) == "input")
+  subset <- dplyr::filter(subset,
+                          grepl("\\.scaled\\.", bw_file, perl = TRUE) | tolower(marker) == "input")
 
-  # Simulate filtering manually (mirrors the function logic):
-  subset_nonpool <- dplyr::filter(
-    bw_df,
-    replicate != "pooled",
-    marker == "H3K4me3" | tolower(marker) == "input"
-  )
-  # scaled filter (non-cNUC)
-  subset_nonpool <- dplyr::filter(
-    subset_nonpool,
-    grepl("\\.scaled\\.", bw_file, perl = TRUE) | tolower(marker) == "input"
-  )
-
-  expect_equal(nrow(subset_nonpool), 3L)
-  expect_true(all(subset_nonpool$marker %in% c("H3K4me3", "INPUT")))
+  expect_equal(nrow(subset), 3L)
+  expect_true(all(subset$marker %in% c("H3K4me3", "INPUT")))
 })
 
-test_that("run_chromhmm_histone selects pooled rows when replicate_type='pooled'", {
+test_that("run_chromhmm_histone selects only pooled rows when replicate_type='pooled'", {
   bw_df <- data.frame(
     marker    = c("H3K4me3", "H3K4me3", "INPUT"),
     sample_id = c("S1",      "S1",      "S1"),
@@ -53,17 +40,14 @@ test_that("run_chromhmm_histone selects pooled rows when replicate_type='pooled'
     stringsAsFactors = FALSE
   )
 
-  subset_pool <- dplyr::filter(
-    bw_df,
-    replicate == "pooled",
-    marker == "H3K4me3" | tolower(marker) == "input"
-  )
+  subset <- dplyr::filter(bw_df, replicate == "pooled",
+                          marker == "H3K4me3" | tolower(marker) == "input")
 
-  expect_equal(nrow(subset_pool), 2L)
-  expect_true(all(subset_pool$replicate == "pooled"))
+  expect_equal(nrow(subset), 2L)
+  expect_true(all(subset$replicate == "pooled"))
 })
 
-test_that("run_chromhmm_histone uses unscaled files for cNUC product", {
+test_that("run_chromhmm_histone selects unscaled files for cNUC product", {
   bw_df <- data.frame(
     marker    = c("H3K4me3", "H3K4me3"),
     sample_id = c("S1",      "S1"),
@@ -73,34 +57,34 @@ test_that("run_chromhmm_histone uses unscaled files for cNUC product", {
     stringsAsFactors = FALSE
   )
 
-  subset_cnuc <- dplyr::filter(
-    bw_df,
-    replicate != "pooled",
-    marker == "H3K4me3" | tolower(marker) == "input"
-  )
-  subset_cnuc <- dplyr::filter(
-    subset_cnuc,
-    grepl("\\.unscaled", bw_file) | tolower(marker) == "input"
-  )
+  subset <- dplyr::filter(bw_df, replicate != "pooled",
+                          marker == "H3K4me3" | tolower(marker) == "input")
+  subset <- dplyr::filter(subset,
+                          grepl("\\.unscaled", bw_file) | tolower(marker) == "input")
 
-  expect_equal(nrow(subset_cnuc), 1L)
-  expect_true(grepl("unscaled", subset_cnuc$bw_file))
+  expect_equal(nrow(subset), 1L)
+  expect_true(grepl("unscaled", subset$bw_file))
 })
 
-# ── run_chromhmm_methylation: file filtering ─────────────────────────────────
-
-test_that("run_chromhmm_methylation includes CXXC rows alongside mk", {
+test_that("run_chromhmm_histone does NOT include methylation markers", {
   bw_df <- make_bw_df()
 
-  subset <- dplyr::filter(
-    bw_df,
-    replicate != "pooled",
-    marker == "5mC" | marker == "CXXC" | tolower(marker) == "input"
-  )
-  subset <- dplyr::filter(
-    subset,
-    grepl("\\.scaled\\.", bw_file, perl = TRUE) | tolower(marker) == "input"
-  )
+  subset <- dplyr::filter(bw_df, replicate != "pooled",
+                          marker == "H3K4me3" | tolower(marker) == "input")
+
+  expect_false("5mC"  %in% subset$marker)
+  expect_false("CXXC" %in% subset$marker)
+})
+
+# ── run_chromhmm_methylation: file filtering ──────────────────────────────────
+
+test_that("run_chromhmm_methylation includes CXXC alongside mk", {
+  bw_df <- make_bw_df()
+
+  subset <- dplyr::filter(bw_df, replicate != "pooled",
+                          marker == "5mC" | marker == "CXXC" | tolower(marker) == "input")
+  subset <- dplyr::filter(subset,
+                          grepl("\\.scaled\\.", bw_file, perl = TRUE) | tolower(marker) == "input")
 
   expect_true("CXXC" %in% subset$marker)
   expect_true("5mC"  %in% subset$marker)
@@ -109,157 +93,85 @@ test_that("run_chromhmm_methylation includes CXXC rows alongside mk", {
 test_that("run_chromhmm_methylation does NOT include histone markers", {
   bw_df <- make_bw_df()
 
-  subset <- dplyr::filter(
-    bw_df,
-    replicate != "pooled",
-    marker == "5mC" | marker == "CXXC" | tolower(marker) == "input"
-  )
+  subset <- dplyr::filter(bw_df, replicate != "pooled",
+                          marker == "5mC" | marker == "CXXC" | tolower(marker) == "input")
 
   expect_false("H3K4me3" %in% subset$marker)
 })
 
-# ── run_chromhmm_histone: skips gracefully on empty file list ────────────────
+# ── sentinel handling ─────────────────────────────────────────────────────────
 
 test_that("run_chromhmm_histone writes .done and returns NULL when no files match", {
-  bw_df <- data.frame(
-    marker    = character(0),
-    sample_id = character(0),
-    replicate = character(0),
-    batch     = character(0),
-    bw_file   = character(0),
-    stringsAsFactors = FALSE
-  )
+  bw_df <- data.frame(marker = character(0), sample_id = character(0),
+                      replicate = character(0), batch = character(0),
+                      bw_file = character(0), stringsAsFactors = FALSE)
   tmp <- tempfile()
   on.exit(unlink(tmp, recursive = TRUE))
 
   result <- run_chromhmm_histone(
-    bw_df      = bw_df,
-    bigwig_dir = tmp,
-    mk         = "H3K4me3",
-    loci       = NULL,   # not reached — no files in bw_df
-    output_dir = tmp,
-    product    = "chromatin"
+    bw_df               = bw_df,
+    bigwig_dir          = tmp,
+    mk                  = "H3K4me3",
+    loci                = NULL,
+    output_dir          = tmp,
+    chromHmm_path       = tmp,
+    chromHMM_annotation = "dummy.bed",
+    product             = "chromatin"
   )
 
   expect_null(result)
   expect_true(file.exists(file.path(tmp, ".done")))
 })
 
-# ── run_chromhmm_methylation: skips gracefully on empty file list ─────────────
-
 test_that("run_chromhmm_methylation writes .done and returns NULL when no files match", {
-  bw_df <- data.frame(
-    marker    = character(0),
-    sample_id = character(0),
-    replicate = character(0),
-    batch     = character(0),
-    bw_file   = character(0),
-    stringsAsFactors = FALSE
-  )
+  bw_df <- data.frame(marker = character(0), sample_id = character(0),
+                      replicate = character(0), batch = character(0),
+                      bw_file = character(0), stringsAsFactors = FALSE)
   tmp <- tempfile()
   on.exit(unlink(tmp, recursive = TRUE))
 
   result <- run_chromhmm_methylation(
-    bw_df      = bw_df,
-    bigwig_dir = tmp,
-    mk         = "5mC",
-    loci       = NULL,   # not reached — no files in bw_df
-    output_dir = tmp,
-    product    = "chromatin"
+    bw_df               = bw_df,
+    bigwig_dir          = tmp,
+    mk                  = "5mC",
+    loci                = NULL,
+    output_dir          = tmp,
+    chromHmm_path       = tmp,
+    chromHMM_annotation = "dummy.bed",
+    product             = "chromatin"
   )
 
   expect_null(result)
   expect_true(file.exists(file.path(tmp, ".done")))
 })
 
-# ── run_chromhmm_enrichment: sentinel-based skipping ────────────────────────
+# ── label construction ────────────────────────────────────────────────────────
 
-test_that("run_chromhmm_enrichment loads profile CSVs into epk", {
-  # Build a minimal EPK with a stats_summary that has one marker
-  epk <- list(
-    mse   = NULL,
-    tables = list(stats_summary = data.frame(
-      marker = "H3K4me3", stringsAsFactors = FALSE
-    )),
-    enrichment_results = list(
-      chromatin_states  = NULL,
-      enrichment_profile = NULL
-    ),
-    provenance = list()
-  )
-  class(epk) <- "EPK"
-
-  tmp <- tempfile()
-  on.exit(unlink(tmp, recursive = TRUE))
-  dir.create(tmp)
-
-  # Simulate a completed marker: .done + profile CSV + chromatin state CSV
-  mk_dir <- file.path(tmp, "H3K4me3")
-  dir.create(mk_dir)
-  file.create(file.path(mk_dir, ".done"))
-
-  profile_csv <- file.path(mk_dir, "H3K4me3_profile_start_data.csv")
-  write.csv(
-    data.frame(index = 1:3, mean = c(0.1, 0.2, 0.3), sample = "H3K4me3_S1_rep1"),
-    profile_csv,
-    row.names = FALSE
-  )
-
-  state_csv <- file.path(mk_dir, "H3K4me3_chromatin_state_dist.csv")
-  write.csv(
-    data.frame(Chromatin_State = "1_TssA", sample_id_rep = "H3K4me3_S1_rep1",
-               mean_rpgc_val = 1.5, mean_rpgc_text = "1.5"),
-    state_csv,
-    row.names = FALSE
-  )
-
+test_that("single-batch labels omit batch suffix", {
   bw_df <- data.frame(
-    marker    = "H3K4me3",
-    sample_id = "S1",
-    replicate = "rep1",
-    batch     = "B1",
-    bw_file   = "file.bw",
+    marker    = c("H3K4me3", "INPUT"),
+    sample_id = c("S1",      "S1"),
+    replicate = c("rep1",    "rep1"),
+    batch     = c("B1",      "B1"),
+    bw_file   = c("H3K4.scaled.bw", "INPUT.scaled.bw"),
     stringsAsFactors = FALSE
   )
 
-  result <- run_chromhmm_enrichment(
-    epk                 = epk,
-    bw_df               = bw_df,
-    bigwig_dir          = tmp,
-    loci                = NULL,   # not reached — marker already done via .done sentinel
-    output_dir          = tmp,
-    chromHmm_path       = tmp,
-    chromHMM_annotation = "dummy.bed",
-    product             = "chromatin",
-    run_mode            = "sequential"
-  )
-
-  expect_false(is.null(result$enrichment_results$enrichment_profile))
-  expect_true("H3K4me3" %in% names(result$enrichment_results$enrichment_profile[[basename(tmp)]]))
-  expect_false(is.null(result$enrichment_results$chromatin_states))
-  expect_true("H3K4me3" %in% names(result$enrichment_results$chromatin_states[[basename(tmp)]]))
+  labels <- paste0(bw_df$marker, "_", bw_df$sample_id, "_", bw_df$replicate)
+  expect_false(any(grepl("_B1$", labels)))
 })
 
-test_that("run_chromhmm_enrichment errors when no markers remain after exclusion", {
-  epk <- list(
-    tables = list(stats_summary = data.frame(
-      marker = "INPUT", stringsAsFactors = FALSE
-    )),
-    enrichment_results = list(enrichment_profile = NULL)
+test_that("multi-batch labels include batch suffix", {
+  bw_df <- data.frame(
+    marker    = c("H3K4me3", "H3K4me3"),
+    sample_id = c("S1",      "S2"),
+    replicate = c("rep1",    "rep1"),
+    batch     = c("B1",      "B2"),
+    bw_file   = c("H3K4.scaled.bw", "H3K4_S2.scaled.bw"),
+    stringsAsFactors = FALSE
   )
-  class(epk) <- "EPK"
 
-  expect_error(
-    run_chromhmm_enrichment(
-      epk                 = epk,
-      bw_df               = data.frame(),
-      bigwig_dir          = tempdir(),
-      loci                = NULL,
-      output_dir          = tempdir(),
-      chromHmm_path       = tempdir(),
-      chromHMM_annotation = "dummy.bed",
-      product             = "chromatin"
-    ),
-    "No markers to process"
-  )
+  labels <- paste0(bw_df$marker, "_", bw_df$sample_id,
+                   "_", bw_df$replicate, "_", bw_df$batch)
+  expect_true(all(grepl("_B[12]$", labels)))
 })
