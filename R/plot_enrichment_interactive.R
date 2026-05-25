@@ -165,7 +165,8 @@ plot_enrichment_interactive <- function(
   mid_coord <- match.arg(mid_coord)
 
   .normalize_plotly_color <- function(x) {
-    x <- as.character(x)
+    nm  <- names(x)
+    x   <- as.character(x)
     out <- x
     is_rgba <- grepl("^rgba\\(", x)
 
@@ -189,6 +190,7 @@ plot_enrichment_interactive <- function(
       out[is_rgba] <- out_rgba
     }
 
+    if (!is.null(nm)) names(out) <- nm
     out
   }
 
