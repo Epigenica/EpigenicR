@@ -193,7 +193,7 @@ test_that("run_chromhmm_enrichment loads profile CSVs into epk", {
   on.exit(unlink(tmp, recursive = TRUE))
   dir.create(tmp)
 
-  # Simulate a completed marker: .done + profile CSV
+  # Simulate a completed marker: .done + profile CSV + chromatin state CSV
   mk_dir <- file.path(tmp, "H3K4me3")
   dir.create(mk_dir)
   file.create(file.path(mk_dir, ".done"))
@@ -202,6 +202,14 @@ test_that("run_chromhmm_enrichment loads profile CSVs into epk", {
   write.csv(
     data.frame(index = 1:3, mean = c(0.1, 0.2, 0.3), sample = "H3K4me3_S1_rep1"),
     profile_csv,
+    row.names = FALSE
+  )
+
+  state_csv <- file.path(mk_dir, "H3K4me3_chromatin_state_dist.csv")
+  write.csv(
+    data.frame(Chromatin_State = "1_TssA", sample_id_rep = "H3K4me3_S1_rep1",
+               mean_rpgc_val = 1.5, mean_rpgc_text = "1.5"),
+    state_csv,
     row.names = FALSE
   )
 
@@ -215,17 +223,21 @@ test_that("run_chromhmm_enrichment loads profile CSVs into epk", {
   )
 
   result <- run_chromhmm_enrichment(
-    epk        = epk,
-    bw_df      = bw_df,
-    bigwig_dir = tmp,
-    loci       = NULL,   # not reached — marker already done via .done sentinel
-    output_dir = tmp,
-    product    = "chromatin",
-    run_mode   = "sequential"
+    epk                 = epk,
+    bw_df               = bw_df,
+    bigwig_dir          = tmp,
+    loci                = NULL,   # not reached — marker already done via .done sentinel
+    output_dir          = tmp,
+    chromHmm_path       = tmp,
+    chromHMM_annotation = "dummy.bed",
+    product             = "chromatin",
+    run_mode            = "sequential"
   )
 
   expect_false(is.null(result$enrichment_results$enrichment_profile))
   expect_true("H3K4me3" %in% names(result$enrichment_results$enrichment_profile[[basename(tmp)]]))
+  expect_false(is.null(result$enrichment_results$chromatin_states))
+  expect_true("H3K4me3" %in% names(result$enrichment_results$chromatin_states[[basename(tmp)]]))
 })
 
 test_that("run_chromhmm_enrichment errors when no markers remain after exclusion", {
@@ -239,12 +251,14 @@ test_that("run_chromhmm_enrichment errors when no markers remain after exclusion
 
   expect_error(
     run_chromhmm_enrichment(
-      epk        = epk,
-      bw_df      = data.frame(),
-      bigwig_dir = tempdir(),
-      loci       = NULL,
-      output_dir = tempdir(),
-      product    = "chromatin"
+      epk                 = epk,
+      bw_df               = data.frame(),
+      bigwig_dir          = tempdir(),
+      loci                = NULL,
+      output_dir          = tempdir(),
+      chromHmm_path       = tempdir(),
+      chromHMM_annotation = "dummy.bed",
+      product             = "chromatin"
     ),
     "No markers to process"
   )
