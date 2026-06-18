@@ -252,10 +252,11 @@ create_epk <- function(
         )
       }
       if (length(extra_meta) > 0) {
-        stop(
-          "'sample_metadata$bw_file' has entries not present in 'bw_files':\n  ",
-          paste(extra_meta, collapse = "\n  ")
+        message(
+          "Ignoring ", length(extra_meta),
+          " sample_metadata row(s) with no matching bw_file after filtering."
         )
+        sm <- sm[sm$bw_file %in% bw_base, , drop = FALSE]
       }
 
       ord <- match(bw_base, sm$bw_file)
@@ -613,6 +614,12 @@ create_epk <- function(
       } else {
         bw_metadata$sample_id[marker_idx]
       }
+      # wigglescout uses dplyr joins internally and requires unique column names;
+      # pre-deduplicate with the same make.names path R applies to rownames so
+      # the result matches existing EPK sample names (e.g. X24h.Control.1)
+      if (anyDuplicated(marker_labels)) {
+        marker_labels <- make.unique(make.names(marker_labels))
+      }
 
       if (length(marker_bw_files) == 0) {
         stop("No BigWig files available for marker '", marker, "' after filtering.")
@@ -625,9 +632,11 @@ create_epk <- function(
         labels = marker_labels
       )
 
-      # Convert to matrix
-      m <- as.matrix(S4Vectors::mcols(bw_gr)[, , drop = FALSE])
-      storage.mode(m) <- "numeric"
+      # Convert to matrix — keep only numeric signal columns (excludes BED
+      # metadata columns like 'name' that wigglescout preserves from the loci)
+      bw_mcol <- as.data.frame(S4Vectors::mcols(bw_gr))
+      num_cols <- vapply(bw_mcol, is.numeric, logical(1))
+      m <- as.matrix(bw_mcol[, num_cols, drop = FALSE])
 
       assay_list[[marker]] <- m
     }
