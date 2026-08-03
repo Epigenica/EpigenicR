@@ -106,7 +106,7 @@ epk <- create_epk(
   pipeline_output_path = toy_dir,
   annotations          = toy_genes,
   bigwig_scale         = "unscaled",
-  replicate_mode       = "pooled",
+  replicate_mode       = "replicate", #toy files are rep1, not pooled
   markers_to_exclude   = c("INPUT")
 )
 print(epk)
@@ -338,7 +338,7 @@ scaling_plot(
 
 ```r
 # Correlations for all markers in one experiment
-epk <- compute_all_cor(epk, exp_name = "genes", method = "pearson", transform = "log1p")
+epk <- compute_all_cor(epk, exp_name = "primary_annotation", method = "pearson", transform = "log1p")
 # Stored in epk$derived$all_cor$genes
 
 # Correlations across all experiments
@@ -346,7 +346,7 @@ epk <- compute_sample_cor(epk, method = "pearson", transform = "log1p")
 # Stored in epk$derived$sample_cor
 
 # Visualise as a heatmap
-heatmap_cor_marker(epk, exp_name = "genes", marker = "H3K4me3")
+heatmap_cor_marker(epk, exp_name = "primary_annotation", marker = "H3K4me3")
 ```
 
 ---
