@@ -45,6 +45,14 @@ EpigenicR provides tools for:
 - **Methylation analysis**: Calculate and visualize beta values from MBD-seq/CXXC assays
 - **Results management**: Load pre-computed enrichment and ChromHMM results into EPK objects
 
+### EPK Object Structure
+
+<img src="man/figures/EpiPeaK_Obj_illustration.png" width="100%" />
+
+*The EPK (EpiPeaK) object bundles genomic feature annotations, a MultiAssayExperiment
+(RPGC matrices per marker), enrichment results (profile + chromatin states), derived analyses
+(correlation, PCA, clustering), QC tables, and provenance into a single `.rds` file.*
+
 ---
 
 ## Toy Dataset
