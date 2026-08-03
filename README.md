@@ -429,72 +429,89 @@ download_chromhmm_annotations(
 
 ### 10. ChromHMM Enrichment Analysis
 
-Compute enrichment profiles and chromatin state distributions for each marker. Two
-specialised functions handle histone marks and methylation respectively;
-`dispatch_chromhmm_jobs()` runs them in parallel.
+Profile generation and chromatin state annotation are now **separate steps**:
 
-#### Histone marks
+- `run_bw_profile()` — enrichment profile only (PNG + CSV); marker-type agnostic
+- `run_chromhmm_histone()` — chromatin state distribution CSV for histone marks
+- `run_chromhmm_methylation()` — chromatin state distribution CSV for methylation marks
+- `dispatch_chromhmm_jobs()` — parallel dispatch for any of the above
+
+Call `run_bw_profile()` separately whenever you want a profile plot; the ChromHMM
+functions no longer produce one automatically.
+
+#### Step 1 — Enrichment profile
 
 ```r
 loci_gr <- readRDS("data/genes_protein_coding_gr.rds")
 
-run_chromhmm_histone_enrichment(
-  bw_df                = bw_df,
-  bigwig_dir           = "minute_output/bigwig/",
-  mk                   = "H3K4me3",
-  loci                 = loci_gr,
-  output_dir           = "output/chromhmm/H3K4me3",
-  chromHmm_path        = "data/chromHmm_annotations/",
-  chromHMM_annotation  = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-  product              = "genomepro",
-  replicate_type       = "replicate",    # or "pooled"
-  plot_bw_profile_mode = "start"         # "start", "end", "center", or "stretch"
+# Histone — TSS-anchored (mode = "start")
+run_bw_profile(
+  allfiles      = c("minute_output/bigwig/H3K4me3_S1.bw",
+                    "minute_output/bigwig/INPUT_S1.bw"),
+  allfiles_name = c("H3K4me3_S1_rep1", "INPUT_S1_rep1"),
+  loci          = loci_gr,
+  mk            = "H3K4me3",
+  output_dir    = "output/chromhmm/protein_coding/H3K4me3",
+  mode          = "start",          # "start" | "end" | "center" | "stretch"
+  loci_label    = "Protein coding"
+)
+
+# Methylation — centered on CpG islands (mode = "center")
+run_bw_profile(
+  allfiles      = c("minute_output/bigwig/5mC_S1.bw",
+                    "minute_output/bigwig/CXXC_S1.bw"),
+  allfiles_name = c("5mC_S1_rep1", "CXXC_S1_rep1"),
+  loci          = cpg_gr,
+  mk            = "5mC",
+  output_dir    = "output/chromhmm/CpG_islands/5mC",
+  mode          = "center",
+  loci_label    = "CpG islands"
 )
 ```
 
-`plot_bw_profile_mode` controls the reference point and x-axis layout of the enrichment
-profile plot. Use `"stretch"` for gene-body-scaled profiles with TSS and TES anchors.
-Pass the same argument to `run_chromhmm_enrichment()` and it is forwarded automatically
-to each histone worker (methylation always uses `"center"`).
-
-```r
-# Gene-body-scaled profile via run_chromhmm_enrichment
-epk <- run_chromhmm_enrichment(
-  epk                  = epk,
-  bw_df                = bw_df,
-  loci                 = loci_gr,
-  output_dir           = "output/chromhmm/protein_coding",
-  chromHMM_annotation  = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-  product              = "genomepro",
-  plot_bw_profile_mode = "stretch"
-)
-```
-
-Output files per marker:
+Output files from `run_bw_profile()`:
 
 | File | Description |
 |------|-------------|
-| `<marker>_profile_<mode>.png` | Enrichment profile (mode = start / end / center / stretch) |
+| `<marker>_profile_<mode>.png` | Enrichment profile plot |
 | `<marker>_profile_<mode>_data.csv` | Profile data table |
-| `<marker>_chromatin_state_dist.png` | Chromatin state distribution boxplot |
-| `<marker>_chromatin_state_dist.csv` | State distribution table |
-| `.done` | Completion sentinel |
 
-#### Methylation
+#### Step 2 — Chromatin state distribution
 
 ```r
-run_chromhmm_methylation_enrichment(
+# Histone marks
+run_chromhmm_histone(
   bw_df               = bw_df,
   bigwig_dir          = "minute_output/bigwig/",
-  mk                  = "5mC",
+  mk                  = "H3K4me3",
   loci                = loci_gr,
-  output_dir          = "output/chromhmm/5mC",
+  output_dir          = "output/chromhmm/protein_coding/H3K4me3",
   chromHmm_path       = "data/chromHmm_annotations/",
   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
   product             = "genomepro",
   replicate_type      = "replicate"   # or "pooled"
 )
+
+# Methylation
+run_chromhmm_methylation(
+  bw_df               = bw_df,
+  bigwig_dir          = "minute_output/bigwig/",
+  mk                  = "5mC",
+  loci                = loci_gr,
+  output_dir          = "output/chromhmm/CpG_islands/5mC",
+  chromHmm_path       = "data/chromHmm_annotations/",
+  chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+  product             = "genomepro",
+  replicate_type      = "replicate"
+)
 ```
+
+Output files from `run_chromhmm_histone()` / `run_chromhmm_methylation()`:
+
+| File | Description |
+|------|-------------|
+| `<marker>_chromatin_state_dist.csv` | Per-state mean RPGC table |
+| `.done` | Completion sentinel |
 
 #### Parallel batch run
 
@@ -506,7 +523,7 @@ jobs <- lapply(markers_to_run, function(mk) {
   op <- file.path("output/chromhmm/protein_coding", mk)
   dir.create(op, recursive = TRUE, showWarnings = FALSE)
   list(
-    fn   = run_chromhmm_histone_enrichment,
+    fn   = run_chromhmm_histone,
     mk   = mk,
     args = list(
       bw_df               = bw_df,
@@ -588,9 +605,9 @@ interactive_heatmap_chromhmm(
 | `interactive_heatmap_chromhmm()` | Visualisation | `epk`, `marker`, `loci`, `show_pooled` | `plotly` heatmap |
 | `ensure_gtf_and_beds()` | Annotations | `gtf_file`, `gtf_url`, `genes_bed`, `tss2k_bed` | BED files written to disk |
 | `download_chromhmm_annotations()` | Annotations | `annotations`, `dest_dir` | BED files written to disk |
-| `run_chromhmm_enrichment()` | ChromHMM | `epk`, `bw_df`, `loci`, `output_dir`, `chromHMM_annotation`, `product`, `run_mode`, `replicate_type`, `plot_bw_profile_mode` | Updated `EPK` with enrichment results |
-| `run_chromhmm_histone_enrichment()` | ChromHMM | `bw_df`, `mk`, `loci`, `output_dir`, `chromHMM_annotation`, `product`, `replicate_type`, `plot_bw_profile_mode` | PNG + CSV files per marker |
-| `run_chromhmm_methylation_enrichment()` | ChromHMM | `bw_df`, `mk`, `loci`, `output_dir`, `chromHMM_annotation`, `product`, `replicate_type` | PNG + CSV files per marker |
+| `run_bw_profile()` | ChromHMM | `allfiles`, `allfiles_name`, `loci`, `mk`, `output_dir`, `mode` (`"start"` / `"end"` / `"center"` / `"stretch"`), `loci_label` | PNG + CSV profile per marker |
+| `run_chromhmm_histone()` | ChromHMM | `bw_df`, `bigwig_dir`, `mk`, `loci`, `output_dir`, `chromHmm_path`, `chromHMM_annotation`, `product`, `replicate_type` | `<marker>_chromatin_state_dist.csv` + `.done` |
+| `run_chromhmm_methylation()` | ChromHMM | `bw_df`, `bigwig_dir`, `mk`, `loci`, `output_dir`, `chromHmm_path`, `chromHMM_annotation`, `product`, `replicate_type` | `<marker>_chromatin_state_dist.csv` + `.done` |
 | `dispatch_chromhmm_jobs()` | ChromHMM | `jobs`, `n_workers` | Runs jobs in parallel; files written by workers |
 | `print.EPK()` | Utility | `x` | Console summary of EPK slots and dimensions |
 
