@@ -55,21 +55,23 @@ Stored in `minute_output/` structure (matching EpiFinder pipeline output):
 inst/extdata/toy_dataset/
 └── minute_output/
     ├── bigwig/
-    │   └── 6 BigWig files (pooled naming: *.pooled.hg38.unscaled.bw)
+    │   └── 8 BigWig files (replicate naming: *.rep1.hg38.unscaled.bw)
     └── reports/
         └── stats_summary.txt
 ```
 
-**BigWig files** (6 total, ~13 MB):
+**BigWig files** (8 total):
 
 | File | Marker | Sample |
 |------|--------|--------|
-| `Proj1_A1_5mC_1_SAMPLE-0008_pooled.hg38.unscaled.bw` | 5mC | SAMPLE-0008 |
-| `Proj1_A1_H3K27ac_1_SAMPLE-0008_pooled.hg38.unscaled.bw` | H3K27ac | SAMPLE-0008 |
-| `Proj1_B1_H3K4me3_1_SAMPLE-0008_pooled.hg38.unscaled.bw` | H3K4me3 | SAMPLE-0008 |
-| `Proj1_A1_5mC_1_SAMPLE-0054_pooled.hg38.unscaled.bw` | 5mC | SAMPLE-0054 |
-| `Proj1_A1_INPUT_1_SAMPLE-0054_pooled.hg38.unscaled.bw` | INPUT | SAMPLE-0054 |
-| `Proj1_B1_H3K4me3_1_SAMPLE-0054_pooled.hg38.unscaled.bw` | H3K4me3 | SAMPLE-0054 |
+| `Proj1_A1_5mC_1_SAMPLE-0008_rep1.hg38.unscaled.bw` | 5mC | SAMPLE-0008 |
+| `Proj1_A1_5mC_1_SAMPLE-0054_rep1.hg38.unscaled.bw` | 5mC | SAMPLE-0054 |
+| `Proj1_A1_H3K27ac_1_SAMPLE-0008_rep1.hg38.unscaled.bw` | H3K27ac | SAMPLE-0008 |
+| `Proj1_A1_H3K27ac_1_SAMPLE-0054_rep1.hg38.unscaled.bw` | H3K27ac | SAMPLE-0054 |
+| `Proj1_A1_H3K4me3_1_SAMPLE-0008_rep1.hg38.unscaled.bw` | H3K4me3 | SAMPLE-0008 |
+| `Proj1_A1_H3K4me3_1_SAMPLE-0054_rep1.hg38.unscaled.bw` | H3K4me3 | SAMPLE-0054 |
+| `Proj1_A1_INPUT_1_SAMPLE-0008_rep1.hg38.unscaled.bw` | INPUT | SAMPLE-0008 |
+| `Proj1_A1_INPUT_1_SAMPLE-0054_rep1.hg38.unscaled.bw` | INPUT | SAMPLE-0054 |
 
 **R data objects**:
 
@@ -81,7 +83,7 @@ inst/extdata/toy_dataset/
 | `enrichment_results` | List — pre-computed chromatin state distributions per marker |
 | `profile_results` | List — pre-computed enrichment profiles per marker and annotation |
 
-**Markers**: 5mC, H3K4me3, H3K27ac, INPUT | **Genome**: hg38 | **Format**: unscaled BigWig
+**Markers**: 5mC, H3K4me3, H3K27ac, INPUT | **Genome**: hg38 | **Format**: unscaled BigWig | **Replicate**: rep1 (use `replicate_mode = "replicate"`)
 
 ---
 
@@ -441,26 +443,42 @@ functions no longer produce one automatically.
 
 #### Step 1 — Enrichment profile
 
+Build the file list from the BigWig directory, then pass it to `run_bw_profile()`.
+The toy dataset below is fully self-contained and can be run as-is.
+
 ```r
-loci_gr <- readRDS("data/genes_protein_coding_gr.rds")
+library(EpigenicR)
+data(toy_genes)
+toy_dir <- system.file("extdata", "toy_dataset", package = "EpigenicR")
+
+# Discover all BigWig files and derive labels by stripping the .bw extension
+all_files      <- list.files(file.path(toy_dir, "minute_output/bigwig"),
+                             recursive = TRUE, full.names = TRUE)
+all_files_name <- gsub(".bw", "", basename(all_files))
 
 # Histone — TSS-anchored (mode = "start")
 run_bw_profile(
-  allfiles      = c("minute_output/bigwig/H3K4me3_S1.bw",
-                    "minute_output/bigwig/INPUT_S1.bw"),
-  allfiles_name = c("H3K4me3_S1_rep1", "INPUT_S1_rep1"),
-  loci          = loci_gr,
+  allfiles      = all_files,
+  allfiles_name = all_files_name,
+  loci          = toy_genes,                        # GRanges of protein-coding genes
   mk            = "H3K4me3",
   output_dir    = "output/chromhmm/protein_coding/H3K4me3",
-  mode          = "start",          # "start" | "end" | "center" | "stretch"
+  mode          = "start",                          # "start" | "end" | "center" | "stretch"
   loci_label    = "Protein coding"
 )
+```
+
+For a real project, supply your own file list and loci:
+
+```r
+loci_gr   <- readRDS("data/genes_protein_coding_gr.rds")
+all_files <- list.files("minute_output/bigwig", pattern = "\\.bw$", full.names = TRUE)
+all_files_name <- gsub(".bw", "", basename(all_files))
 
 # Methylation — centered on CpG islands (mode = "center")
 run_bw_profile(
-  allfiles      = c("minute_output/bigwig/5mC_S1.bw",
-                    "minute_output/bigwig/CXXC_S1.bw"),
-  allfiles_name = c("5mC_S1_rep1", "CXXC_S1_rep1"),
+  allfiles      = all_files,
+  allfiles_name = all_files_name,
   loci          = cpg_gr,
   mk            = "5mC",
   output_dir    = "output/chromhmm/CpG_islands/5mC",
