@@ -443,7 +443,9 @@ functions no longer produce one automatically.
 
 #### Step 1 — Enrichment profile
 
-Build the file list from the BigWig directory, then pass it to `run_bw_profile()`.
+Profile outputs go under `output/profile/<loci_name>/<marker>/` so that
+`add_results_to_epk()` can load them into `enrichment_profile[[loci_name]][[marker]]`.
+
 The toy dataset below is fully self-contained and can be run as-is.
 
 ```r
@@ -462,7 +464,7 @@ run_bw_profile(
   allfiles_name = all_files_name,
   loci          = toy_genes,                        # GRanges of protein-coding genes
   mk            = "H3K4me3",
-  output_dir    = "output/chromhmm/protein_coding/H3K4me3",
+  output_dir    = "output/profile/protein_coding/H3K4me3",
   mode          = "start",                          # "start" | "end" | "center" | "stretch"
   loci_label    = "Protein coding"
 )
@@ -471,8 +473,8 @@ run_bw_profile(
 For a real project, supply your own file list and loci:
 
 ```r
-loci_gr   <- readRDS("data/genes_protein_coding_gr.rds")
-all_files <- list.files("minute_output/bigwig", pattern = "\\.bw$", full.names = TRUE)
+loci_gr        <- readRDS("data/genes_protein_coding_gr.rds")
+all_files      <- list.files("minute_output/bigwig", pattern = "\\.bw$", full.names = TRUE)
 all_files_name <- gsub(".bw", "", basename(all_files))
 
 # Methylation — centered on CpG islands (mode = "center")
@@ -481,7 +483,7 @@ run_bw_profile(
   allfiles_name = all_files_name,
   loci          = cpg_gr,
   mk            = "5mC",
-  output_dir    = "output/chromhmm/CpG_islands/5mC",
+  output_dir    = "output/profile/CpG_islands/5mC",
   mode          = "center",
   loci_label    = "CpG islands"
 )
@@ -499,6 +501,18 @@ Output files from `run_bw_profile()`:
 Output goes into `output/chromhmm/<chromhmm_ref>/<marker>/` where `<chromhmm_ref>` is
 the ChromHMM BED filename without `.bed`. This ensures `add_results_to_epk()` keys
 results by ChromHMM reference, so multiple references can coexist in one EPK.
+
+`run_chromhmm_histone()` and `run_chromhmm_methylation()` take a `bw_df` metadata
+data frame with columns `marker`, `sample_id`, `replicate`, `batch`, and `bw_file`
+(basename only — the directory is supplied separately via `bigwig_dir`).
+Build it from `create_metadata_df()`:
+
+```r
+bw_files <- list.files("minute_output/bigwig", pattern = "\\.bw$", full.names = TRUE)
+bw_df    <- create_metadata_df(bw_files = bw_files)
+# bw_df$bw_file contains basenames; pass the parent directory as bigwig_dir
+bigwig_dir <- "minute_output/bigwig"
+```
 
 ```r
 chromhmm_annotation <- "E107_15_coreMarks_hg38lift_mnemonics.bed"
