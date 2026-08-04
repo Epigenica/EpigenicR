@@ -138,6 +138,14 @@ run_bw_profile <- function(allfiles, allfiles_name, loci, mk, output_dir,
 #' @details
 #' Chromatin state enrichment is genome-wide against the ChromHMM reference
 #' BED — no user-supplied loci are involved.
+#'
+#' \strong{Output directory convention:} use
+#' \code{output/chromhmm/<chromhmm_ref>/<marker>} where \code{chromhmm_ref}
+#' is the ChromHMM annotation filename without \code{.bed}
+#' (e.g. \code{gsub(".bed$", "", chromHMM_annotation)}). This ensures
+#' \code{add_results_to_epk()} keys results by ChromHMM reference rather than
+#' by loci name, allowing multiple references to coexist in one EPK.
+#'
 #' Designed for parallel execution via \code{\link{dispatch_chromhmm_jobs}}.
 #' The \code{.done} sentinel allows downstream cache-checking to skip completed
 #' markers on re-runs.
@@ -151,11 +159,12 @@ run_bw_profile <- function(allfiles, allfiles_name, loci, mk, output_dir,
 #'
 #' @examples
 #' \dontrun{
+#' chromhmm_ref <- gsub(".bed$", "", "E107_15_coreMarks_hg38lift_mnemonics.bed")
 #' run_chromhmm_histone(
 #'   bw_df               = bw_df,
 #'   bigwig_dir          = "/path/to/bigwigs",
 #'   mk                  = "H3K4me3",
-#'   output_dir          = "results/protein_coding/H3K4me3",
+#'   output_dir          = file.path("output/chromhmm", chromhmm_ref, "H3K4me3"),
 #'   chromHmm_path       = "data/chromHmm_annotations",
 #'   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
 #'   product             = "chromatin"
@@ -280,6 +289,10 @@ run_chromhmm_histone <- function(bw_df, bigwig_dir, mk, output_dir,
 #' same run. Chromatin state enrichment is genome-wide against the ChromHMM
 #' reference BED — no user-supplied loci are involved.
 #'
+#' \strong{Output directory convention:} use
+#' \code{output/chromhmm/<chromhmm_ref>/<marker>} — see
+#' \code{\link{run_chromhmm_histone}} for details.
+#'
 #' Designed for parallel execution via \code{\link{dispatch_chromhmm_jobs}}.
 #'
 #' @seealso \code{\link{run_bw_profile}}, \code{\link{run_chromhmm_histone}},
@@ -288,11 +301,12 @@ run_chromhmm_histone <- function(bw_df, bigwig_dir, mk, output_dir,
 #' @examples
 #' \dontrun{
 #' # Only call when 5mC is present in the project
+#' chromhmm_ref <- gsub(".bed$", "", "E107_15_coreMarks_hg38lift_mnemonics.bed")
 #' run_chromhmm_methylation(
 #'   bw_df               = bw_df,
 #'   bigwig_dir          = "/path/to/bigwigs",
 #'   mk                  = "5mC",
-#'   output_dir          = "results/CpG_islands/5mC",
+#'   output_dir          = file.path("output/chromhmm", chromhmm_ref, "5mC"),
 #'   chromHmm_path       = "data/chromHmm_annotations",
 #'   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
 #'   product             = "chromatin"
@@ -412,6 +426,8 @@ run_chromhmm_methylation <- function(bw_df, bigwig_dir, mk, output_dir,
 #' @examples
 #' \dontrun{
 #' histone_markers <- c("H3K4me3", "H3K27ac", "H3K9me3")
+#' chromhmm_annotation <- "E107_15_coreMarks_hg38lift_mnemonics.bed"
+#' chromhmm_ref        <- gsub(".bed$", "", chromhmm_annotation)
 #'
 #' jobs <- lapply(histone_markers, function(mk) {
 #'   list(
@@ -421,9 +437,9 @@ run_chromhmm_methylation <- function(bw_df, bigwig_dir, mk, output_dir,
 #'       bw_df               = bw_df,
 #'       bigwig_dir          = "/path/to/bw",
 #'       mk                  = mk,
-#'       output_dir          = file.path("results", mk),
+#'       output_dir          = file.path("output/chromhmm", chromhmm_ref, mk),
 #'       chromHmm_path       = "data/chromHmm_annotations",
-#'       chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+#'       chromHMM_annotation = chromhmm_annotation,
 #'       product             = "chromatin"
 #'     )
 #'   )

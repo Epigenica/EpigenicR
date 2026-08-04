@@ -5,39 +5,51 @@
 #' an existing \code{EPK} object.
 #'
 #' @details
-#' Two directory layouts are supported and can be mixed within the same
-#' \code{results_path}:
+#' Profile results and chromatin state results live in separate root directories
+#' and are loaded with two separate calls:
 #'
 #' \describe{
-#'   \item{Nested layout}{Marker subdirectories sit inside an annotation
-#'     directory, e.g. \code{protein_coding/H3K27ac/H3K27ac_profile_start_data.csv}.
-#'     The subdirectory name is used as the marker key.}
-#'   \item{Flat layout}{CSV files sit directly inside an annotation directory,
-#'     e.g. \code{CpG_islands/methylation_profile_start_data.csv}.
-#'     The marker key is inferred from the filename prefix up to the first
-#'     \code{_profile} or \code{_chromatin_state_dist} token.}
+#'   \item{Profiles}{\code{output/profile/<loci_name>/<marker>/} — keyed as
+#'     \code{enrichment_profile[[loci_name]][[marker]]}.}
+#'   \item{Chromatin states}{\code{output/chromhmm/<chromhmm_ref>/<marker>/} — keyed as
+#'     \code{chromatin_states[[chromhmm_ref]][[marker]]}, where \code{chromhmm_ref}
+#'     is the ChromHMM reference BED filename without the \code{.bed} extension
+#'     (e.g. \code{"E107_15_coreMarks_hg38lift_mnemonics"}).}
+#' }
+#'
+#' Within each root, two sub-layouts are supported:
+#' \describe{
+#'   \item{Nested}{\code{<key>/<marker>/file.csv} — marker inferred from subdirectory name.}
+#'   \item{Flat}{\code{<key>/file.csv} — marker inferred from filename prefix.}
 #' }
 #'
 #' Files are routed to slots based on their filename:
 #' \itemize{
 #'   \item \code{*_chromatin_state_dist.csv} →
-#'     \code{epk$enrichment_results$chromatin_states[[annotation]][[marker]]}
+#'     \code{epk$enrichment_results$chromatin_states[[chromhmm_ref]][[marker]]}
 #'   \item \code{*_profile_*_data.csv} →
-#'     \code{epk$enrichment_results$enrichment_profile[[annotation]][[marker]]}
+#'     \code{epk$enrichment_results$enrichment_profile[[loci_name]][[marker]]}
 #' }
 #'
 #' @param epk An \code{EPK} object.
-#' @param results_path Character; path to the top-level results directory whose
-#'   immediate subdirectories represent annotation sets (e.g.
-#'   \code{"protein_coding"}, \code{"CpG_islands"}).
+#' @param results_path Character; path to a top-level results directory whose
+#'   immediate subdirectories are used as the slot key (loci name for profiles,
+#'   ChromHMM reference name for chromatin states).
 #'
-#' @return The updated \code{EPK} object with
-#'   \code{enrichment_results$chromatin_states} and
-#'   \code{enrichment_results$enrichment_profile} populated.
+#' @return The updated \code{EPK} object with the relevant
+#'   \code{enrichment_results} slots populated.
 #'
 #' @examples
 #' \dontrun{
-#' epk <- add_results_to_epk(epk, results_path = "path/to/results")
+#' # Load profiles (keyed by loci name)
+#' epk <- add_results_to_epk(epk, results_path = "output/profile")
+#'
+#' # Load chromatin states (keyed by ChromHMM reference name)
+#' epk <- add_results_to_epk(epk, results_path = "output/chromhmm")
+#'
+#' # Results are now accessible:
+#' # epk$enrichment_results$enrichment_profile$protein_coding$H3K4me3
+#' # epk$enrichment_results$chromatin_states$E107_15_coreMarks_hg38lift_mnemonics$H3K4me3
 #' str(epk$enrichment_results, max.level = 2)
 #' }
 #'

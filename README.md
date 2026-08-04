@@ -496,15 +496,22 @@ Output files from `run_bw_profile()`:
 
 #### Step 2 — Chromatin state distribution
 
+Output goes into `output/chromhmm/<chromhmm_ref>/<marker>/` where `<chromhmm_ref>` is
+the ChromHMM BED filename without `.bed`. This ensures `add_results_to_epk()` keys
+results by ChromHMM reference, so multiple references can coexist in one EPK.
+
 ```r
+chromhmm_annotation <- "E107_15_coreMarks_hg38lift_mnemonics.bed"
+chromhmm_ref        <- gsub(".bed$", "", chromhmm_annotation)
+
 # Histone marks
 run_chromhmm_histone(
   bw_df               = bw_df,
   bigwig_dir          = "minute_output/bigwig/",
   mk                  = "H3K4me3",
-  output_dir          = "output/chromhmm/protein_coding/H3K4me3",
+  output_dir          = file.path("output/chromhmm", chromhmm_ref, "H3K4me3"),
   chromHmm_path       = "data/chromHmm_annotations/",
-  chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+  chromHMM_annotation = chromhmm_annotation,
   product             = "genomepro",
   replicate_type      = "replicate"   # or "pooled"
 )
@@ -514,9 +521,9 @@ run_chromhmm_methylation(
   bw_df               = bw_df,
   bigwig_dir          = "minute_output/bigwig/",
   mk                  = "5mC",
-  output_dir          = "output/chromhmm/CpG_islands/5mC",
+  output_dir          = file.path("output/chromhmm", chromhmm_ref, "5mC"),
   chromHmm_path       = "data/chromHmm_annotations/",
-  chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+  chromHMM_annotation = chromhmm_annotation,
   product             = "genomepro",
   replicate_type      = "replicate"
 )
@@ -532,11 +539,14 @@ Output files from `run_chromhmm_histone()` / `run_chromhmm_methylation()`:
 #### Parallel batch run
 
 ```r
+chromhmm_annotation <- "E107_15_coreMarks_hg38lift_mnemonics.bed"
+chromhmm_ref        <- gsub(".bed$", "", chromhmm_annotation)
+
 markers_to_run <- setdiff(unique(epk$tables$stats_summary$marker), "INPUT")
 n_workers <- max(1L, min(length(markers_to_run), parallel::detectCores() - 1L))
 
 jobs <- lapply(markers_to_run, function(mk) {
-  op <- file.path("output/chromhmm/protein_coding", mk)
+  op <- file.path("output/chromhmm", chromhmm_ref, mk)
   dir.create(op, recursive = TRUE, showWarnings = FALSE)
   list(
     fn   = run_chromhmm_histone,
@@ -547,7 +557,7 @@ jobs <- lapply(markers_to_run, function(mk) {
       mk                  = mk,
       output_dir          = op,
       chromHmm_path       = "data/chromHmm_annotations/",
-      chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+      chromHMM_annotation = chromhmm_annotation,
       product             = "genomepro"
     )
   )
@@ -566,21 +576,25 @@ dispatch_chromhmm_jobs(jobs, n_workers = n_workers)
 
 ### 11. Load Pre-computed Results into EPK
 
-After ChromHMM runs complete, `add_results_to_epk()` reads the output CSVs and stores
-them in `epk$enrichment_results`.
+After runs complete, call `add_results_to_epk()` once per output root — profiles and
+chromatin states live in separate directories and use different slot keys:
 
-The function handles two directory layouts automatically:
-
-- **Nested** — `<annotation>/<marker>/files.csv` (e.g., `protein_coding/H3K4me3/`)
-- **Flat** — `<annotation>/files.csv` (e.g., `CpG_islands/methylation_profile_start_data.csv`)
+| Root directory | Slot key | Slot path |
+|----------------|----------|-----------|
+| `output/profile/` | loci name (directory name) | `enrichment_profile[[loci_name]][[marker]]` |
+| `output/chromhmm/` | ChromHMM reference (directory name) | `chromatin_states[[chromhmm_ref]][[marker]]` |
 
 ```r
+# Load enrichment profiles (keyed by loci name)
+epk <- add_results_to_epk(epk, results_path = "output/profile")
+
+# Load chromatin state distributions (keyed by ChromHMM reference)
 epk <- add_results_to_epk(epk, results_path = "output/chromhmm")
 
 # Results are now accessible:
-# epk$enrichment_results$chromatin_states$protein_coding$H3K4me3
 # epk$enrichment_results$enrichment_profile$protein_coding$H3K4me3
-# epk$enrichment_results$chromatin_states$cpg_islands$methylation
+# epk$enrichment_results$chromatin_states$E107_15_coreMarks_hg38lift_mnemonics$H3K4me3
+# epk$enrichment_results$chromatin_states$E116_15_coreMarks_hg38lift_mnemonics$H3K4me3  # second ref
 ```
 
 #### Interactive ChromHMM heatmap
@@ -590,10 +604,10 @@ data(enrichment_results)
 epk$enrichment_results$chromatin_states <- enrichment_results
 
 interactive_heatmap_chromhmm(
-  epk         = epk,
-  marker      = "H3K4me3",
-  loci        = "protein_coding",
-  show_pooled = FALSE
+  epk          = epk,
+  marker       = "H3K4me3",
+  chromhmm_ref = "E107_15_coreMarks_hg38lift_mnemonics",
+  show_pooled  = FALSE
 )
 ```
 
@@ -617,7 +631,7 @@ interactive_heatmap_chromhmm(
 | `calculate_beta_val()` | Methylation | `epk`, `feature`, `pseudocount`, `method` | Updated `EPK` with beta assays added |
 | `plot_beta_density()` | Methylation | `epk`, `feature`, `method` | `ggplot` density figure |
 | `plot_enrichment_interactive()` | Visualisation | `df` or `epk`, `marker`, `loci`, `mid_coord` (`"center"` / `"start"` / `"stretch"`), `group_by` | `plotly` figure |
-| `interactive_heatmap_chromhmm()` | Visualisation | `epk`, `marker`, `loci`, `show_pooled` | `plotly` heatmap |
+| `interactive_heatmap_chromhmm()` | Visualisation | `epk`, `marker`, `chromhmm_ref`, `show_pooled` | `plotly` heatmap |
 | `ensure_gtf_and_beds()` | Annotations | `gtf_file`, `gtf_url`, `genes_bed`, `tss2k_bed` | BED files written to disk |
 | `download_chromhmm_annotations()` | Annotations | `annotations`, `dest_dir` | BED files written to disk |
 | `run_bw_profile()` | ChromHMM | `allfiles`, `allfiles_name`, `loci`, `mk`, `output_dir`, `mode` (`"start"` / `"end"` / `"center"` / `"stretch"`), `loci_label` | PNG + CSV profile per marker |
