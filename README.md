@@ -496,6 +496,46 @@ Output files from `run_bw_profile()`:
 | `<marker>_profile_<mode>.png` | Enrichment profile plot |
 | `<marker>_profile_<mode>_data.csv` | Profile data table |
 
+#### Parallel dispatch — profile across all markers
+
+Use `dispatch_chromhmm_jobs()` to run one profile job per marker in parallel,
+then load all results into the EPK with a single `add_results_to_epk()` call.
+
+```r
+loci_name <- "protein_coding"   # becomes the slot key in enrichment_profile
+loci_gr   <- genes_coord_protein_coding
+
+unique_markers <- setdiff(unique(epk$tables$stats_summary$marker), "INPUT")
+n_workers      <- max(1L, min(length(unique_markers), parallel::detectCores() - 1L))
+
+jobs <- lapply(unique_markers, function(mk) {
+  idx    <- bw_df$marker == mk
+  files  <- file.path(bigwig_dir, bw_df$bw_file[idx])
+  labels <- paste(bw_df$sample_id[idx], bw_df$replicate[idx], sep = "_")
+  op     <- file.path("output/profile", loci_name, mk)
+  dir.create(op, recursive = TRUE, showWarnings = FALSE)
+  list(
+    fn   = run_bw_profile,
+    mk   = mk,
+    args = list(
+      allfiles      = files,
+      allfiles_name = labels,
+      loci          = loci_gr,
+      mk            = mk,
+      output_dir    = op,
+      mode          = "start",
+      loci_label    = loci_name
+    )
+  )
+})
+
+dispatch_chromhmm_jobs(jobs, n_workers = n_workers)
+
+# Load profile CSVs into EPK — keyed by loci_name
+epk <- add_results_to_epk(epk, results_path = "output/profile")
+# epk$enrichment_results$enrichment_profile$protein_coding$H3K4me3
+```
+
 #### Step 2 — Chromatin state distribution
 
 Output goes into `output/chromhmm/<chromhmm_ref>/<marker>/` where `<chromhmm_ref>` is

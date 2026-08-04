@@ -418,10 +418,7 @@ run_chromhmm_methylation <- function(bw_df, bigwig_dir, mk, output_dir,
 #'   \item Loops until all jobs are complete.
 #' }
 #'
-#' \code{run_bw_profile} calls are intentionally not dispatched here — profile
-#' generation is a separate user-driven step.
-#'
-#' @seealso \code{\link{run_chromhmm_histone}}, \code{\link{run_chromhmm_methylation}}
+#' @seealso \code{\link{run_bw_profile}}, \code{\link{run_chromhmm_histone}}, \code{\link{run_chromhmm_methylation}}
 #'
 #' @examples
 #' \dontrun{
