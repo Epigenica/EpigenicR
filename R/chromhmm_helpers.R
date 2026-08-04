@@ -117,8 +117,6 @@ run_bw_profile <- function(allfiles, allfiles_name, loci, mk, output_dir,
 #'   in \code{bw_df$bw_file}.
 #' @param mk Character; marker name to process (e.g. \code{"H3K4me3"},
 #'   \code{"H3K27ac"}).
-#' @param loci A \code{GRanges} object of genomic features used as the
-#'   background for ChromHMM enrichment.
 #' @param output_dir Character; directory for output files (created if absent).
 #' @param chromHmm_path Character; path to the ChromHMM annotation directory.
 #' @param chromHMM_annotation Character; ChromHMM annotation filename within
@@ -138,6 +136,8 @@ run_bw_profile <- function(allfiles, allfiles_name, loci, mk, output_dir,
 #'   }
 #'
 #' @details
+#' Chromatin state enrichment is genome-wide against the ChromHMM reference
+#' BED — no user-supplied loci are involved.
 #' Designed for parallel execution via \code{\link{dispatch_chromhmm_jobs}}.
 #' The \code{.done} sentinel allows downstream cache-checking to skip completed
 #' markers on re-runs.
@@ -155,7 +155,6 @@ run_bw_profile <- function(allfiles, allfiles_name, loci, mk, output_dir,
 #'   bw_df               = bw_df,
 #'   bigwig_dir          = "/path/to/bigwigs",
 #'   mk                  = "H3K4me3",
-#'   loci                = tss_granges,
 #'   output_dir          = "results/protein_coding/H3K4me3",
 #'   chromHmm_path       = "data/chromHmm_annotations",
 #'   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
@@ -164,7 +163,7 @@ run_bw_profile <- function(allfiles, allfiles_name, loci, mk, output_dir,
 #' }
 #'
 #' @export
-run_chromhmm_histone <- function(bw_df, bigwig_dir, mk, loci, output_dir,
+run_chromhmm_histone <- function(bw_df, bigwig_dir, mk, output_dir,
                                  chromHmm_path, chromHMM_annotation,
                                  product,
                                  replicate_type = c("replicate", "pooled")) {
@@ -258,7 +257,6 @@ run_chromhmm_histone <- function(bw_df, bigwig_dir, mk, loci, output_dir,
 #'   in \code{bw_df$bw_file}.
 #' @param mk Character; primary methylation marker (typically \code{"5mC"}).
 #'   CXXC files are included automatically.
-#' @param loci A \code{GRanges} object of genomic features (e.g. CpG islands).
 #' @param output_dir Character; directory for output files (created if absent).
 #' @param chromHmm_path Character; path to the ChromHMM annotation directory.
 #' @param chromHMM_annotation Character; ChromHMM annotation filename within
@@ -279,7 +277,8 @@ run_chromhmm_histone <- function(bw_df, bigwig_dir, mk, loci, output_dir,
 #' @details
 #' CXXC files are pulled from \code{bw_df} alongside \code{mk} so that the
 #' ChromHMM enrichment reflects both 5mC and its unmodified counterpart in the
-#' same run.
+#' same run. Chromatin state enrichment is genome-wide against the ChromHMM
+#' reference BED — no user-supplied loci are involved.
 #'
 #' Designed for parallel execution via \code{\link{dispatch_chromhmm_jobs}}.
 #'
@@ -293,7 +292,6 @@ run_chromhmm_histone <- function(bw_df, bigwig_dir, mk, loci, output_dir,
 #'   bw_df               = bw_df,
 #'   bigwig_dir          = "/path/to/bigwigs",
 #'   mk                  = "5mC",
-#'   loci                = cpg_granges,
 #'   output_dir          = "results/CpG_islands/5mC",
 #'   chromHmm_path       = "data/chromHmm_annotations",
 #'   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
@@ -302,7 +300,7 @@ run_chromhmm_histone <- function(bw_df, bigwig_dir, mk, loci, output_dir,
 #' }
 #'
 #' @export
-run_chromhmm_methylation <- function(bw_df, bigwig_dir, mk, loci, output_dir,
+run_chromhmm_methylation <- function(bw_df, bigwig_dir, mk, output_dir,
                                      chromHmm_path, chromHMM_annotation,
                                      product,
                                      replicate_type = c("replicate", "pooled")) {
@@ -423,7 +421,6 @@ run_chromhmm_methylation <- function(bw_df, bigwig_dir, mk, loci, output_dir,
 #'       bw_df               = bw_df,
 #'       bigwig_dir          = "/path/to/bw",
 #'       mk                  = mk,
-#'       loci                = loci,
 #'       output_dir          = file.path("results", mk),
 #'       chromHmm_path       = "data/chromHmm_annotations",
 #'       chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",

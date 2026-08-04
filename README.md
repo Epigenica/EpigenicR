@@ -502,7 +502,6 @@ run_chromhmm_histone(
   bw_df               = bw_df,
   bigwig_dir          = "minute_output/bigwig/",
   mk                  = "H3K4me3",
-  loci                = loci_gr,
   output_dir          = "output/chromhmm/protein_coding/H3K4me3",
   chromHmm_path       = "data/chromHmm_annotations/",
   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
@@ -515,7 +514,6 @@ run_chromhmm_methylation(
   bw_df               = bw_df,
   bigwig_dir          = "minute_output/bigwig/",
   mk                  = "5mC",
-  loci                = loci_gr,
   output_dir          = "output/chromhmm/CpG_islands/5mC",
   chromHmm_path       = "data/chromHmm_annotations/",
   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
@@ -547,7 +545,6 @@ jobs <- lapply(markers_to_run, function(mk) {
       bw_df               = bw_df,
       bigwig_dir          = "minute_output/bigwig/",
       mk                  = mk,
-      loci                = loci_gr,
       output_dir          = op,
       chromHmm_path       = "data/chromHmm_annotations/",
       chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
@@ -624,8 +621,8 @@ interactive_heatmap_chromhmm(
 | `ensure_gtf_and_beds()` | Annotations | `gtf_file`, `gtf_url`, `genes_bed`, `tss2k_bed` | BED files written to disk |
 | `download_chromhmm_annotations()` | Annotations | `annotations`, `dest_dir` | BED files written to disk |
 | `run_bw_profile()` | ChromHMM | `allfiles`, `allfiles_name`, `loci`, `mk`, `output_dir`, `mode` (`"start"` / `"end"` / `"center"` / `"stretch"`), `loci_label` | PNG + CSV profile per marker |
-| `run_chromhmm_histone()` | ChromHMM | `bw_df`, `bigwig_dir`, `mk`, `loci`, `output_dir`, `chromHmm_path`, `chromHMM_annotation`, `product`, `replicate_type` | `<marker>_chromatin_state_dist.csv` + `.done` |
-| `run_chromhmm_methylation()` | ChromHMM | `bw_df`, `bigwig_dir`, `mk`, `loci`, `output_dir`, `chromHmm_path`, `chromHMM_annotation`, `product`, `replicate_type` | `<marker>_chromatin_state_dist.csv` + `.done` |
+| `run_chromhmm_histone()` | ChromHMM | `bw_df`, `bigwig_dir`, `mk`, `output_dir`, `chromHmm_path`, `chromHMM_annotation`, `product`, `replicate_type` | `<marker>_chromatin_state_dist.csv` + `.done` |
+| `run_chromhmm_methylation()` | ChromHMM | `bw_df`, `bigwig_dir`, `mk`, `output_dir`, `chromHmm_path`, `chromHMM_annotation`, `product`, `replicate_type` | `<marker>_chromatin_state_dist.csv` + `.done` |
 | `dispatch_chromhmm_jobs()` | ChromHMM | `jobs`, `n_workers` | Runs jobs in parallel; files written by workers |
 | `print.EPK()` | Utility | `x` | Console summary of EPK slots and dimensions |
 
