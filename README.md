@@ -436,7 +436,7 @@ Profile generation and chromatin state annotation are now **separate steps**:
 - `run_bw_profile()` — enrichment profile only (PNG + CSV); marker-type agnostic
 - `run_chromhmm_histone()` — chromatin state distribution CSV for histone marks
 - `run_chromhmm_methylation()` — chromatin state distribution CSV for methylation marks
-- `dispatch_chromhmm_jobs()` — parallel dispatch for any of the above
+- `dispatch_jobs()` — parallel dispatch for any of the above
 
 Call `run_bw_profile()` separately whenever you want a profile plot; the ChromHMM
 functions no longer produce one automatically.
@@ -498,7 +498,7 @@ Output files from `run_bw_profile()`:
 
 #### Parallel dispatch — profile across all markers
 
-Use `dispatch_chromhmm_jobs()` to run one profile job per marker in parallel,
+Use `dispatch_jobs()` to run one profile job per marker in parallel,
 then load all results into the EPK with a single `add_results_to_epk()` call.
 
 ```r
@@ -529,7 +529,7 @@ jobs <- lapply(unique_markers, function(mk) {
   )
 })
 
-dispatch_chromhmm_jobs(jobs, n_workers = n_workers)
+dispatch_jobs(jobs, n_workers = n_workers)
 
 # Load profile CSVs into EPK — keyed by loci_name
 epk <- add_results_to_epk(epk, results_path = "output/profile")
@@ -617,7 +617,7 @@ jobs <- lapply(markers_to_run, function(mk) {
   )
 })
 
-dispatch_chromhmm_jobs(jobs, n_workers = n_workers)
+dispatch_jobs(jobs, n_workers = n_workers)
 ```
 
 | `n_workers` value | Behaviour |
@@ -691,7 +691,7 @@ interactive_heatmap_chromhmm(
 | `run_bw_profile()` | ChromHMM | `allfiles`, `allfiles_name`, `loci`, `mk`, `output_dir`, `mode` (`"start"` / `"end"` / `"center"` / `"stretch"`), `loci_label` | PNG + CSV profile per marker |
 | `run_chromhmm_histone()` | ChromHMM | `bw_df`, `bigwig_dir`, `mk`, `output_dir`, `chromHmm_path`, `chromHMM_annotation`, `product`, `replicate_type` | `<marker>_chromatin_state_dist.csv` + `.done` |
 | `run_chromhmm_methylation()` | ChromHMM | `bw_df`, `bigwig_dir`, `mk`, `output_dir`, `chromHmm_path`, `chromHMM_annotation`, `product`, `replicate_type` | `<marker>_chromatin_state_dist.csv` + `.done` |
-| `dispatch_chromhmm_jobs()` | ChromHMM | `jobs`, `n_workers` | Runs jobs in parallel; files written by workers |
+| `dispatch_jobs()` | Enrichment | `jobs`, `n_workers` | Runs jobs in parallel; files written by workers |
 | `print.EPK()` | Utility | `x` | Console summary of EPK slots and dimensions |
 
 ---

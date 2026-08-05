@@ -31,7 +31,7 @@
 #'   }
 #'
 #' @seealso \code{\link{run_chromhmm_histone}}, \code{\link{run_chromhmm_methylation}},
-#'   \code{\link{dispatch_chromhmm_jobs}}
+#'   \code{\link{dispatch_jobs}}
 #'
 #' @examples
 #' \dontrun{
@@ -146,7 +146,7 @@ run_bw_profile <- function(allfiles, allfiles_name, loci, mk, output_dir,
 #' \code{add_results_to_epk()} keys results by ChromHMM reference rather than
 #' by loci name, allowing multiple references to coexist in one EPK.
 #'
-#' Designed for parallel execution via \code{\link{dispatch_chromhmm_jobs}}.
+#' Designed for parallel execution via \code{\link{dispatch_jobs}}.
 #' The \code{.done} sentinel allows downstream cache-checking to skip completed
 #' markers on re-runs.
 #'
@@ -155,7 +155,7 @@ run_bw_profile <- function(allfiles, allfiles_name, loci, mk, output_dir,
 #' file selection.
 #'
 #' @seealso \code{\link{run_bw_profile}}, \code{\link{run_chromhmm_methylation}},
-#'   \code{\link{dispatch_chromhmm_jobs}}
+#'   \code{\link{dispatch_jobs}}
 #'
 #' @examples
 #' \dontrun{
@@ -293,10 +293,10 @@ run_chromhmm_histone <- function(bw_df, bigwig_dir, mk, output_dir,
 #' \code{output/chromhmm/<chromhmm_ref>/<marker>} — see
 #' \code{\link{run_chromhmm_histone}} for details.
 #'
-#' Designed for parallel execution via \code{\link{dispatch_chromhmm_jobs}}.
+#' Designed for parallel execution via \code{\link{dispatch_jobs}}.
 #'
 #' @seealso \code{\link{run_bw_profile}}, \code{\link{run_chromhmm_histone}},
-#'   \code{\link{dispatch_chromhmm_jobs}}
+#'   \code{\link{dispatch_jobs}}
 #'
 #' @examples
 #' \dontrun{
@@ -442,7 +442,7 @@ run_chromhmm_methylation <- function(bw_df, bigwig_dir, mk, output_dir,
 #'   )
 #' })
 #'
-#' dispatch_chromhmm_jobs(jobs, n_workers = 4)
+#' dispatch_jobs(jobs, n_workers = 4)
 #'
 #' # Methylation separately, only if 5mC is in the project
 #' if ("5mC" %in% unique(bw_df$marker)) {
@@ -451,7 +451,7 @@ run_chromhmm_methylation <- function(bw_df, bigwig_dir, mk, output_dir,
 #' }
 #'
 #' @export
-dispatch_chromhmm_jobs <- function(jobs, n_workers) {
+dispatch_jobs <- function(jobs, n_workers) {
   running <- list()
   pending <- jobs
 
