@@ -275,13 +275,13 @@ epk_pkg
 ```
 You can think of it like this:
 - `epk_pkg` = the entire project.
-- *mse* = the main data container holding all of the experimental measurements.
-- *Experiments* (protein_coding, cpg) = different biological datasets.
-- *Assays* = the actual numerical data (e.g., enrichment scores, counts, normalized values).
-- *Sample metadata* = information about the samples.
-- *Sample map* = keeps samples matched correctly across different experiments.
-- *Tables* = summary statistics and other tabular results.
-- *Enrichment results* = outputs from downstream analyses.
+- **mse** = the main data container holding all of the experimental measurements.
+- **Experiments** (protein_coding, cpg) = different biological datasets.
+- **Assays** = the actual numerical data (e.g., enrichment scores, counts, normalized values).
+- **Sample metadata** = information about the samples.
+- **Sample map** = keeps samples matched correctly across different experiments.
+- **Tables** = summary statistics and other tabular results.
+- **Enrichment** results* = outputs from downstream analyses.
 
 So when you run:
 
