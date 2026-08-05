@@ -340,7 +340,9 @@ scaling_plot(
 
 ```r
 # Correlations for all markers in one experiment
-epk <- compute_all_cor(epk, exp_name = "primary_annotation", method = "pearson", transform = "log1p")
+# exp_name must match the annotation list key used in create_epk()
+# e.g. list(genes = ...) → exp_name = "genes"
+epk <- compute_all_cor(epk, exp_name = "genes", method = "pearson", transform = "log1p")
 # Stored in epk$derived$all_cor$genes
 
 # Correlations across all experiments
@@ -427,6 +429,34 @@ download_chromhmm_annotations(
 )
 ```
 
+#### Load protein-coding genes as GRanges
+
+After `ensure_gtf_and_beds()` produces `genes.hg38.bed`, load it as a GRanges for use
+in `create_epk()` and `run_bw_profile()`:
+
+```r
+library(GenomicRanges)
+
+genes_coord_protein_coding <- read.table(
+    "data/genes.hg38.bed", sep = "\t", header = FALSE, stringsAsFactors = FALSE
+  ) |>
+  subset(V8 == "protein_coding", select = c(V1, V2, V3, V4, V5, V7)) |>
+  GenomicRanges::makeGRangesFromDataFrame(
+    seqnames.field = "V1", start.field = "V2", end.field = "V3",
+    strand.field   = "V7", keep.extra.columns = TRUE
+  )
+
+# Remove coordinate duplicates and name the metadata columns
+k_in <- paste0(
+  GenomicRanges::seqnames(genes_coord_protein_coding), ":",
+  GenomicRanges::start(genes_coord_protein_coding),    "-",
+  GenomicRanges::end(genes_coord_protein_coding),      ":",
+  GenomicRanges::strand(genes_coord_protein_coding)
+)
+genes_coord_protein_coding <- genes_coord_protein_coding[!duplicated(k_in)]
+colnames(S4Vectors::mcols(genes_coord_protein_coding)) <- c("gene_name", "gene_id")
+```
+
 ---
 
 ### 10. ChromHMM Enrichment Analysis
@@ -442,13 +472,21 @@ Call `run_bw_profile()` separately whenever you want a profile plot; the ChromHM
 functions no longer produce one automatically.
 
 Both steps use a `bw_df` metadata data frame (columns: `marker`, `sample_id`,
-`replicate`, `batch`, `bw_file`) built once from `create_metadata_df()`:
+`replicate`, `batch`, `bw_file`) built once from `create_metadata_df()`.
+Filter the files to match what `create_epk()` used (`bigwig_scale = "scaled"`,
+`replicate_mode = "replicates"`):
 
 ```r
-bw_files   <- list.files("minute_output/bigwig", pattern = "\\.bw$", full.names = TRUE)
-bw_df      <- create_metadata_df(bw_files = bw_files)
-# bw_df$bw_file contains basenames; pass the parent directory as bigwig_dir
-bigwig_dir <- "minute_output/bigwig"
+pipeline_output_path <- "/path/to/project/minute_output"
+bigwig_dir           <- file.path(pipeline_output_path, "bigwig")
+
+bw_files <- list.files(bigwig_dir, recursive = TRUE, full.names = TRUE,
+                        pattern = "\\.scaled\\.bw$")
+bw_files <- grep("pooled", bw_files, invert = TRUE, value = TRUE)
+bw_df    <- create_metadata_df(bw_files = bw_files)
+
+chromhmm_annotation <- "E107_15_coreMarks_hg38lift_mnemonics.bed"   # see section 9
+chromhmm_ref        <- gsub("\\.bed$", "", chromhmm_annotation)
 ```
 
 #### Step 1 — Enrichment profile
@@ -553,13 +591,10 @@ the ChromHMM BED filename without `.bed`. This ensures `add_results_to_epk()` ke
 results by ChromHMM reference, so multiple references can coexist in one EPK.
 
 ```r
-chromhmm_annotation <- "E107_15_coreMarks_hg38lift_mnemonics.bed"
-chromhmm_ref        <- gsub(".bed$", "", chromhmm_annotation)
-
 # Histone marks
 run_chromhmm_histone(
   bw_df               = bw_df,
-  bigwig_dir          = "minute_output/bigwig/",
+  bigwig_dir          = bigwig_dir,
   mk                  = "H3K4me3",
   output_dir          = file.path("output/chromhmm", chromhmm_ref, "H3K4me3"),
   chromHmm_path       = "data/chromHmm_annotations/",
@@ -568,17 +603,19 @@ run_chromhmm_histone(
   replicate_type      = "replicate"   # or "pooled"
 )
 
-# Methylation
-run_chromhmm_methylation(
-  bw_df               = bw_df,
-  bigwig_dir          = "minute_output/bigwig/",
-  mk                  = "5mC",
-  output_dir          = file.path("output/chromhmm", chromhmm_ref, "5mC"),
-  chromHmm_path       = "data/chromHmm_annotations/",
-  chromHMM_annotation = chromhmm_annotation,
-  product             = "genomepro",
-  replicate_type      = "replicate"
-)
+# Methylation (only if 5mC is in the project)
+if ("5mC" %in% unique(bw_df$marker)) {
+  run_chromhmm_methylation(
+    bw_df               = bw_df,
+    bigwig_dir          = bigwig_dir,
+    mk                  = "5mC",
+    output_dir          = file.path("output/chromhmm", chromhmm_ref, "5mC"),
+    chromHmm_path       = "data/chromHmm_annotations/",
+    chromHMM_annotation = chromhmm_annotation,
+    product             = "genomepro",
+    replicate_type      = "replicate"
+  )
+}
 ```
 
 Output files from `run_chromhmm_histone()` / `run_chromhmm_methylation()`:
@@ -591,11 +628,8 @@ Output files from `run_chromhmm_histone()` / `run_chromhmm_methylation()`:
 #### Parallel batch run
 
 ```r
-chromhmm_annotation <- "E107_15_coreMarks_hg38lift_mnemonics.bed"
-chromhmm_ref        <- gsub(".bed$", "", chromhmm_annotation)
-
 markers_to_run <- setdiff(unique(epk$tables$stats_summary$marker), "INPUT")
-n_workers <- max(1L, min(length(markers_to_run), parallel::detectCores() - 1L))
+n_workers      <- max(1L, min(length(markers_to_run), parallel::detectCores() - 1L))
 
 jobs <- lapply(markers_to_run, function(mk) {
   op <- file.path("output/chromhmm", chromhmm_ref, mk)
@@ -605,7 +639,7 @@ jobs <- lapply(markers_to_run, function(mk) {
     mk   = mk,
     args = list(
       bw_df               = bw_df,
-      bigwig_dir          = "minute_output/bigwig/",
+      bigwig_dir          = bigwig_dir,
       mk                  = mk,
       output_dir          = op,
       chromHmm_path       = "data/chromHmm_annotations/",
