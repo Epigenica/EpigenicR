@@ -410,29 +410,11 @@ and `max(index)` in the profile data — no extra arguments needed.
 
 ---
 
-### 9. Download Genomic Annotations
-
-```r
-# Download GTF and create gene / TSS BED files
-ensure_gtf_and_beds(
-  gtf_file  = "data/gencode.v38.annotation.gtf",
-  gtf_url   = "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_38/gencode.v38.annotation.gtf.gz",
-  genes_bed = "data/genes.hg38.bed",
-  tss2k_bed = "data/genes_tss_2kb.hg38.bed"
-)
-
-# Download ChromHMM segmentation (E107 = Skeletal Muscle Male)
-# Full list: https://egg2.wustl.edu/roadmap/web_portal/chr_state_learning.html
-download_chromhmm_annotations(
-  annotations = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-  dest_dir    = "data/chromHmm_annotations/"
-)
-```
+### 9. Genomic Annotations
 
 #### Load protein-coding genes as GRanges
 
-After `ensure_gtf_and_beds()` produces `genes.hg38.bed`, load it as a GRanges for use
-in `create_epk()` and `run_bw_profile()`:
+Point to any existing `genes.hg38.bed` file (GENCODE format with biotype in column 8):
 
 ```r
 library(GenomicRanges)
@@ -455,6 +437,27 @@ k_in <- paste0(
 )
 genes_coord_protein_coding <- genes_coord_protein_coding[!duplicated(k_in)]
 colnames(S4Vectors::mcols(genes_coord_protein_coding)) <- c("gene_name", "gene_id")
+```
+
+#### Download ChromHMM annotations
+
+```r
+# Full list: https://egg2.wustl.edu/roadmap/web_portal/chr_state_learning.html
+download_chromhmm_annotations(
+  annotations = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+  dest_dir    = "data/chromHmm_annotations/"
+)
+```
+
+#### Create gene BED from GTF (optional — only if you don't already have one)
+
+```r
+ensure_gtf_and_beds(
+  gtf_file  = "data/gencode.v38.annotation.gtf",
+  gtf_url   = "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_38/gencode.v38.annotation.gtf.gz",
+  genes_bed = "data/genes.hg38.bed",
+  tss2k_bed = "data/genes_tss_2kb.hg38.bed"
+)
 ```
 
 ---
@@ -485,7 +488,7 @@ bw_files <- list.files(bigwig_dir, recursive = TRUE, full.names = TRUE,
 bw_files <- grep("pooled", bw_files, invert = TRUE, value = TRUE)
 bw_df    <- create_metadata_df(bw_files = bw_files)
 
-chromhmm_annotation <- "E107_15_coreMarks_hg38lift_mnemonics.bed"   # see section 9
+chromhmm_annotation <- "E107_15_coreMarks_hg38lift_mnemonics.bed"
 chromhmm_ref        <- gsub("\\.bed$", "", chromhmm_annotation)
 ```
 
