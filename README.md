@@ -211,11 +211,11 @@ epk <- readRDS("project.epk.rds")
 
 Now that you have created an EPK object using the toy dataset, it's helpful to explore an EPK generated from a larger, more realistic dataset. This will give you a better understanding of how an EPK object is structured and how its contents are organized.
 
-A pre-generated EPK object is included with the EpigenicR package and is available after installation. You can load it using:
+A pre-generated EPK object is included with the EpigenicR package and is available after installation. You can dynamically locate its file path and load it using:
 ```r
-epk_pkg <- readRDS(".../4.2/Resources/library/EpigenicR/data/project.epk.rds")
+epk <- readRDS(file.path(find.package("EpigenicR"), "data", "project.epk.rds"))
 ```
-Once you load the EPK you can type `epk_pkg` in the console and you will get the following
+Once you load the EPK you can type `epk` in the console and you will get the following
 ```r
 EPK object
 -----------
@@ -232,7 +232,7 @@ EPK object
 
 In summary the EPK is like a well organized binder that has the following structure:
 ```r
-epk_pkg
+epk
 │
 ├── mse (MultiAssayExperiment)
 │   │
@@ -274,7 +274,7 @@ epk_pkg
     └── 2026-03-06 17:55:12
 ```
 You can think of it like this:
-- `epk_pkg` = the entire project.
+- `epk` = the entire project.
 - **mse** = the main data container holding all of the experimental measurements.
 - **Experiments** (protein_coding, cpg) = different biological datasets.
 - **Assays** = the actual numerical data (e.g., enrichment scores, counts, normalized values).
@@ -286,32 +286,32 @@ You can think of it like this:
 So when you run:
 
 ```r
-epk_pkg$mse
+epk$mse
 ```
 you're opening the main experimental data container inside the EPK object.
 
 Then when you run:
 ```r
-names(epk_pkg$mse)
+names(epk$mse)
 ```
 you see the experiments (`protein_coding`, `cpg`).
 
 And when you run with the function `assay`:
 ```r
-assay(epk_pkg$mse[["protein_coding"]])
-assay(epk_pkg$mse[["protein_coding"]], "5mC")
-assay(epk_pkg$mse[["cpg"]])
+assay(epk$mse[["protein_coding"]])
+assay(epk$mse[["protein_coding"]], "5mC")
+assay(epk$mse[["cpg"]])
 ```
 you finally reach the actual matrix of measurements stored for that experiment.
 
 For looking at a specific experiment the following can be done:
 ```r
-protein <- epk_pkg$mse[["protein_coding"]]
+protein <- epk$mse[["protein_coding"]]
 ```
 
 Or if you want to look at a specific assay with in the experiment the following can also be done:
 ```r
-m5C_data <- assay(epk_pkg$mse[["protein_coding"]], "5mC")
+m5C_data <- assay(epk$mse[["protein_coding"]], "5mC")
 ```
 
 You can then inspect it using the following functions:
