@@ -206,6 +206,128 @@ epk <- create_epk(
 saveRDS(epk, "project.epk.rds")
 epk <- readRDS("project.epk.rds")
 ```
+---
+### 1.1 Getting familiar with the EPK 
+
+Now that you have created an EPK object using the toy dataset, it's helpful to explore an EPK generated from a larger, more realistic dataset. This will give you a better understanding of how an EPK object is structured and how its contents are organized.
+
+A pre-generated EPK object is included with the EpigenicR package and is available after installation. You can dynamically locate its file path and load it using:
+```r
+epk <- readRDS(file.path(find.package("EpigenicR"), "data", "project.epk.rds"))
+```
+Once you load the EPK you can type `epk` in the console and you will get the following
+```r
+EPK object
+-----------
+* Markers: 5mC, H3K27ac, H3K4me3, INPUT #these are the different types of epigenetic signals that were measured
+* Experiments:
+  - protein_coding: 19954 features × 2 samples, 3 assays #this states that there were 19,954 genes being measured, and that there were 2 biological samples, and that there are 3 different measurements available for each gene.
+  - cpg: 32038 features × 2 samples, 3 assays #this shows that there were 32,038 CpG locations in the genome that were measured for 2 different biological samples, and 3 measurements for each CpG site.
+* Tables:
+  - stats_summary: 8 rows × 17 cols
+* Enrichment results: 2 tables
+* Created: 2026-03-06 17:55:12 
+```
+**Overall Picture**
+
+In summary the EPK is like a well organized binder that has the following structure:
+```r
+epk
+│
+├── mse (MultiAssayExperiment)
+│   │
+│   ├── Experiments
+│   │   ├── protein_coding
+│   │   │    ├── 19,954 features (genes)
+│   │   │    ├── 2 samples
+│   │   │    └── 3 assays (data matrices)
+│   │   │
+│   │   └── cpg
+│   │        ├── 32,038 features (CpG sites)
+│   │        ├── 2 samples
+│   │        └── 3 assays (data matrices)
+│   │
+│   ├── Sample metadata (colData)
+│   │      └── Information about each sample
+│   │
+│   ├── Sample map
+│   │      └── Links samples across experiments
+│   │
+│   └── Metadata
+│          └── Additional information about the experiment
+│
+├── Markers
+│   ├── 5mC
+│   ├── H3K27ac
+│   ├── H3K4me3
+│   └── INPUT
+│
+├── Tables
+│   └── stats_summary
+│         └── 8 rows × 17 columns
+│
+├── Enrichment results
+│   ├── Table 1
+│   └── Table 2
+│
+└── Created
+    └── 2026-03-06 17:55:12
+```
+You can think of it like this:
+- `epk` = the entire project.
+- **mse** = the main data container holding all of the experimental measurements.
+- **Experiments** (protein_coding, cpg) = different biological datasets.
+- **Assays** = the actual numerical data (e.g., enrichment scores, counts, normalized values).
+- **Sample metadata** = information about the samples.
+- **Sample map** = keeps samples matched correctly across different experiments.
+- **Tables** = summary statistics and other tabular results.
+- **Enrichment** results* = outputs from downstream analyses.
+
+So when you run:
+
+```r
+epk$mse
+```
+you're opening the main experimental data container inside the EPK object.
+
+Then when you run:
+```r
+names(epk$mse)
+```
+you see the experiments (`protein_coding`, `cpg`).
+
+And when you run with the function `assay`:
+```r
+assay(epk$mse[["protein_coding"]])
+assay(epk$mse[["protein_coding"]], "5mC")
+assay(epk$mse[["cpg"]])
+```
+you finally reach the actual matrix of measurements stored for that experiment.
+
+For looking at a specific experiment the following can be done:
+```r
+protein <- epk$mse[["protein_coding"]]
+```
+
+Or if you want to look at a specific assay with in the experiment the following can also be done:
+```r
+m5C_data <- assay(epk$mse[["protein_coding"]], "5mC")
+```
+
+You can then inspect it using the following functions:
+
+| Function | What it tells you |
+|----------|--------------------|
+| `class(protein)` | Returns the class of the object (often a `SummarizedExperiment`). |
+| `dim(protein)` | Returns the number of features × samples. |
+| `rownames(protein)` | Lists the feature names (e.g., genes). |
+| `colnames(protein)` | Lists the sample names. |
+| `assays(protein)` | Lists all available assays (data matrices). |
+| `assay(protein)` | Returns the default assay (data matrix). |
+| `rowData(protein)` | Displays metadata for each feature (gene). |
+| `colData(protein)` | Displays metadata for each sample. |
+| `metadata(protein)` | Displays additional metadata about the experiment. |
+
 
 ---
 
