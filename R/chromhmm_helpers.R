@@ -1,442 +1,457 @@
-#' Run ChromHMM enrichment analysis for histone marks
+#' Plot BigWig enrichment profile at genomic loci
 #'
-#' Computes enrichment profiles and chromatin state distributions for histone
-#' modification markers (e.g., H3K4me3, H3K27ac) at genomic features using
-#' ChromHMM annotations. Generates visualization and summary tables.
+#' Runs \code{wigglescout::plot_bw_profile} for a set of pre-resolved BigWig
+#' files, saves the resulting plot and underlying data to \code{output_dir},
+#' and returns \code{invisible(NULL)}.
 #'
-#' @param bw_df Data frame containing BigWig file metadata with columns:
-#'   \code{marker}, \code{sample_id}, \code{replicate}, \code{batch},
-#'   \code{scaling}, \code{bw_file}.
-#' @param bigwig_dir Character; path to directory containing BigWig files.
-#' @param mk Character; marker name (e.g., "H3K4me3", "H3K27ac").
-#' @param loci A \code{GRanges} object specifying genomic features for analysis.
-#' @param output_dir Character; path where output plots and tables are saved.
-#' @param chromHmm_path Character; path to ChromHMM annotation directory.
-#' @param chromHMM_annotation Character; name of ChromHMM annotation file
-#'   (e.g., "E107_15_coreMarks_hg38lift_mnemonics.bed").
-#' @param product Character; product type ("cNUC" uses unscaled bigWigs;
-#'   others use scaled).
-#' @param replicate_type Character; which replicates to use. One of
-#'   \code{"replicate"} (default, uses non-pooled replicates) or
-#'   \code{"pooled"} (uses pooled files only).
-#' @param plot_bw_profile_mode Character; anchoring mode passed to
+#' This function is intentionally agnostic to marker type — the caller chooses
+#' \code{mode} and \code{loci_label} appropriate for their context (e.g.
+#' \code{mode = "start"} for histone TSS profiles, \code{mode = "center"} for
+#' methylation at CpG islands).
+#'
+#' @param allfiles Character vector of BigWig file paths.
+#' @param allfiles_name Character vector of sample labels corresponding to
+#'   \code{allfiles}.
+#' @param loci A \code{GRanges} object specifying the genomic features.
+#' @param mk Character; marker name used in output filenames and the x-axis
+#'   label (e.g. \code{"H3K4me3"}, \code{"5mC"}).
+#' @param output_dir Character; directory where PNG and CSV files are written.
+#'   Created recursively if absent.
+#' @param mode Character; anchoring mode passed to
 #'   \code{wigglescout::plot_bw_profile}. One of \code{"start"} (default),
 #'   \code{"stretch"}, \code{"end"}, or \code{"center"}.
+#' @param loci_label Character; short description of the loci type shown in
+#'   the x-axis label, e.g. \code{"Protein coding"} or \code{"CpG islands"}.
+#'   Default: \code{"genomic features"}.
 #'
 #' @return Invisibly returns \code{NULL}. Writes to \code{output_dir}:
 #'   \itemize{
-#'     \item PNG: enrichment profile plot (\code{<marker>_profile_<mode>.png})
-#'     \item CSV: profile data (\code{<marker>_profile_<mode>_data.csv})
-#'     \item PNG: chromatin state distribution (\code{<marker>_chromatin_state_dist.png})
-#'     \item CSV: chromatin state summary (\code{<marker>_chromatin_state_dist.csv})
-#'     \item Sentinel file: \code{.done} written on successful completion
+#'     \item PNG: \code{<mk>_profile_<mode>.png}
+#'     \item CSV: \code{<mk>_profile_<mode>_data.csv}
 #'   }
 #'
-#' @details
-#' Generates two outputs:
-#' \enumerate{
-#'   \item \strong{Enrichment profile}: Signal at TSS filtered by \code{replicate_type}.
-#'   \item \strong{Chromatin state distribution}: Mean RPGC per state.
-#' }
-#'
-#' Designed for parallel execution via \code{dispatch_chromhmm_jobs()}.
+#' @seealso \code{\link{run_chromhmm_histone}}, \code{\link{run_chromhmm_methylation}},
+#'   \code{\link{dispatch_jobs}}
 #'
 #' @examples
 #' \dontrun{
-#' # Setup sample data
-#' bw_df <- data.frame(
-#'   marker = c("H3K4me3", "H3K4me3", "INPUT"),
-#'   sample_id = c("Sample_A", "Sample_A", "Sample_A"),
-#'   replicate = c("rep1", "pooled", "pooled"),
-#'   batch = c("B1", "B1", "B1"),
-#'   scaling = c("scaled", "scaled", "scaled"),
-#'   bw_file = c("file1.bw", "file2.bw", "file3.bw")
+#' # Histone — TSS anchored at start
+#' run_bw_profile(
+#'   allfiles      = c("/bw/H3K4me3_S1.bw", "/bw/INPUT_S1.bw"),
+#'   allfiles_name = c("H3K4me3_S1_rep1",   "INPUT_S1_rep1"),
+#'   loci          = tss_granges,
+#'   mk            = "H3K4me3",
+#'   output_dir    = "results/protein_coding/H3K4me3",
+#'   mode          = "start",
+#'   loci_label    = "Protein coding"
 #' )
-#' loci <- GenomicRanges::GRanges("chr1:1-1000:+")
 #'
-#' run_chromhmm_histone_enrichment(
-#'   bw_df = bw_df,
-#'   bigwig_dir = "/path/to/bigwigs",
-#'   mk = "H3K4me3",
-#'   loci = loci,
-#'   output_dir = "/path/to/output",
-#'   chromHmm_path = "/path/to/chromhmm",
-#'   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-#'   product = "chromatin"
+#' # Methylation — centered on CpG islands
+#' run_bw_profile(
+#'   allfiles      = c("/bw/5mC_S1.bw", "/bw/CXXC_S1.bw"),
+#'   allfiles_name = c("5mC_S1_rep1",   "CXXC_S1_rep1"),
+#'   loci          = cpg_granges,
+#'   mk            = "5mC",
+#'   output_dir    = "results/CpG_islands/5mC",
+#'   mode          = "center",
+#'   loci_label    = "CpG islands"
 #' )
 #' }
 #'
 #' @export
-run_chromhmm_histone_enrichment <- function(bw_df, bigwig_dir, mk, loci,
-                                 output_dir, chromHmm_path, chromHMM_annotation,
-                                 product,
-                                 replicate_type = c("replicate", "pooled"),
-                                 plot_bw_profile_mode = c("start", "stretch", "end", "center")) {
-  replicate_type       <- match.arg(replicate_type)
-  plot_bw_profile_mode <- match.arg(plot_bw_profile_mode)
+run_bw_profile <- function(allfiles, allfiles_name, loci, mk, output_dir,
+                           mode = c("start", "stretch", "end", "center"),
+                           loci_label = "genomic features") {
+  mode <- match.arg(mode)
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-  if (replicate_type == "pooled") {
-    bw_df_subset <- dplyr::filter(bw_df, replicate == "pooled",
-                                  marker == mk | tolower(marker) == "input")
-  } else {
-    bw_df_subset <- dplyr::filter(bw_df, replicate != "pooled",
-                                  marker == mk | tolower(marker) == "input")
-  }
+  p_enrich <- wigglescout::plot_bw_profile(
+    allfiles,
+    loci   = loci,
+    mode   = mode,
+    labels = allfiles_name
+  )
 
-  if (product != "cNUC") {
-    bw_df_subset <- dplyr::filter(bw_df_subset,
-                                  grepl("\\.scaled\\.", bw_file, perl = TRUE) |
-                                    tolower(marker) == "input")
-  } else {
-    bw_df_subset <- dplyr::filter(bw_df_subset,
-                                  grepl("\\.unscaled", bw_file) |
-                                    tolower(marker) == "input")
-  }
-
-  allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
-
-  if (length(allfiles) == 0) {
-    message(sprintf("[chromHMM:%s] no bigWig files found in bw_df - skipping enrichment profile.", mk))
-  } else {
-    if (length(unique(bw_df_subset$batch)) > 1) {
-      allfiles_name <- paste0(
-        bw_df_subset$marker, "_", bw_df_subset$sample_id,
-        "_", bw_df_subset$replicate, "_", bw_df_subset$batch
-      )
-    } else {
-      allfiles_name <- paste0(
-        bw_df_subset$marker, "_", bw_df_subset$sample_id,
-        "_", bw_df_subset$replicate
-      )
-    }
-
-    p_enrich <- wigglescout::plot_bw_profile(
-      allfiles,
-      loci = loci,
-      mode = plot_bw_profile_mode,
-      labels = allfiles_name
+  p_enrich <- p_enrich +
+    ggplot2::theme_bw(base_size = 16) +
+    ggplot2::labs(
+      x = paste0(mk, " ", loci_label, " (", length(loci), ") loci")
+    ) +
+    ggplot2::guides(color = ggplot2::guide_legend(ncol = 1, byrow = TRUE)) +
+    ggplot2::theme(
+      legend.position = "right",
+      legend.title    = ggplot2::element_blank()
     )
 
-    p_enrich <- p_enrich +
-      ggplot2::theme_bw(base_size = 16) +
-      ggplot2::labs(x = paste0(mk, " Protein coding (", length(loci), ") loci")) +
-      ggplot2::guides(color = ggplot2::guide_legend(ncol = 1, byrow = TRUE)) +
-      ggplot2::theme(
-        legend.position = "right",
-        legend.title = ggplot2::element_blank()
-      )
+  profile_png <- file.path(output_dir, paste0(mk, "_profile_", mode, ".png"))
+  ggplot2::ggsave(profile_png, plot = p_enrich, width = 12, height = 8)
 
-    profile_png <- file.path(
-      output_dir, paste0(mk, "_profile_", plot_bw_profile_mode, ".png")
-    )
-    ggplot2::ggsave(profile_png, plot = p_enrich, width = 12, height = 8)
+  profile_csv <- file.path(
+    output_dir,
+    paste0(mk, "_profile_", mode, "_data.csv")
+  )
+  write.table(
+    p_enrich$data,
+    profile_csv,
+    row.names = FALSE,
+    quote     = FALSE,
+    col.names = TRUE,
+    sep       = ","
+  )
 
-    profile_csv <- file.path(
-      output_dir,
-      paste0(mk, "_profile_", plot_bw_profile_mode, "_data.csv")
-    )
-    write.table(
-      p_enrich$data,
-      profile_csv,
-      row.names = FALSE,
-      quote = FALSE,
-      col.names = TRUE,
-      sep = ","
-    )
-  }
-
-  # --- chromHMM boxplot ---
-  if (length(allfiles) == 0) {
-    message(sprintf("[chromHMM:%s] no bigWig files found in bw_df - skipping chromHMM boxplot.", mk))
-  } else {
-    p_heatmap <- wigglescout::plot_bw_loci_summary_heatmap(
-      allfiles,
-      file.path(chromHmm_path, chromHMM_annotation),
-      labels = allfiles_name,
-      remove_top = 0.01
-    )
-
-    tmp_df <- p_heatmap@data
-    colnames(tmp_df) <- c("Chromatin_State", "sample_id_rep", "mean_rpgc_val", "mean_rpgc_text")
-
-    p_box <- ggplot2::ggplot(tmp_df, ggplot2::aes(x = Chromatin_State, y = mean_rpgc_val)) +
-      ggplot2::geom_boxplot() +
-      ggplot2::theme_bw() +
-      ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5)) +
-      ggplot2::labs(
-        title = paste0(mk, " coverage per region (mean RPGC)"),
-        x = "Features",
-        y = "RPGC"
-      ) +
-      ggplot2::coord_flip()
-
-    ggplot2::ggsave(
-      file.path(output_dir, paste0(mk, "_chromatin_state_dist.png")),
-      plot = p_box,
-      width = 12,
-      height = 8
-    )
-
-    write.table(
-      tmp_df,
-      file.path(output_dir, paste0(mk, "_chromatin_state_dist.csv")),
-      sep = ",",
-      quote = FALSE,
-      row.names = FALSE,
-      col.names = TRUE
-    )
-  }
-
-  file.create(file.path(output_dir, ".done"))
   invisible(NULL)
 }
 
-#' Run ChromHMM enrichment analysis for methylation marks
+
+#' Compute ChromHMM state distribution for a histone modification marker
 #'
-#' Computes enrichment profiles and chromatin state distributions for methylation
-#' markers (5mC and CXXC) at genomic features using ChromHMM annotations.
-#' Generates visualization and summary tables.
+#' Filters BigWig metadata for a histone marker (plus INPUT controls), computes
+#' per-chromatin-state mean RPGC via
+#' \code{wigglescout::plot_bw_loci_summary_heatmap}, and saves the summary
+#' table as a CSV. Profile generation is intentionally excluded — call
+#' \code{\link{run_bw_profile}} separately if a profile is also needed.
 #'
-#' @param bw_df Data frame containing BigWig file metadata with columns:
-#'   \code{marker}, \code{sample_id}, \code{replicate}, \code{batch},
-#'   \code{scaling}, \code{bw_file}.
-#' @param bigwig_dir Character; path to directory containing BigWig files.
-#' @param mk Character; marker name (typically "5mC" or "CXXC").
-#' @param loci A \code{GRanges} object specifying genomic features for analysis.
-#' @param output_dir Character; path where output plots and tables are saved.
-#' @param chromHmm_path Character; path to ChromHMM annotation directory.
-#' @param chromHMM_annotation Character; name of ChromHMM annotation file
-#'   (e.g., "E107_15_coreMarks_hg38lift_mnemonics.bed").
-#' @param product Character; product type ("cNUC" uses unscaled bigWigs;
-#'   others use scaled).
-#' @param replicate_type Character; which replicates to use. One of
-#'   \code{"replicate"} (default) or \code{"pooled"}.
+#' @param bw_df Data frame of BigWig metadata with columns \code{marker},
+#'   \code{sample_id}, \code{replicate}, \code{batch}, and \code{bw_file}.
+#' @param bigwig_dir Character; directory containing the BigWig files listed
+#'   in \code{bw_df$bw_file}.
+#' @param mk Character; marker name to process (e.g. \code{"H3K4me3"},
+#'   \code{"H3K27ac"}).
+#' @param output_dir Character; directory for output files (created if absent).
+#' @param chromHmm_path Character; path to the ChromHMM annotation directory.
+#' @param chromHMM_annotation Character; ChromHMM annotation filename within
+#'   \code{chromHmm_path} (e.g.
+#'   \code{"E107_15_coreMarks_hg38lift_mnemonics.bed"}).
+#' @param product Character; \code{"cNUC"} selects unscaled BigWigs; all other
+#'   values select scaled BigWigs. INPUT controls are always included.
+#' @param replicate_type Character; \code{"replicate"} (default, non-pooled)
+#'   or \code{"pooled"}.
 #'
-#' @return Invisibly returns \code{NULL}. Writes:
+#' @return Invisibly returns \code{NULL}. Writes to \code{output_dir}:
 #'   \itemize{
-#'     \item PNG: enrichment profile plot (\code{methylation_profile_center.png})
-#'     \item CSV: profile data (\code{methylation_profile_center_data.csv})
-#'     \item PNG: chromatin state distribution (\code{5mC_chromatin_state_dist.png})
-#'     \item CSV: chromatin state summary (\code{5mC_chromatin_state_dist.csv})
-#'     \item Marker file: \code{.done} upon completion
+#'     \item CSV: \code{<mk>_chromatin_state_dist.csv} with columns
+#'       \code{Chromatin_State}, \code{sample_id_rep}, \code{mean_rpgc_val},
+#'       \code{mean_rpgc_text}
+#'     \item Sentinel: \code{.done} on successful completion
 #'   }
 #'
 #' @details
-#' Generates two outputs:
-#' \enumerate{
-#'   \item \strong{Enrichment profile}: Signal at central region for pooled replicates of 5mC and CXXC.
-#'   \item \strong{Chromatin state distribution}: Mean RPGC per state across 5mC replicates.
-#' }
+#' Chromatin state enrichment is genome-wide against the ChromHMM reference
+#' BED — no user-supplied loci are involved.
 #'
-#' Designed for parallel execution via \code{dispatch_chromhmm_jobs()}.
+#' \strong{Output directory convention:} use
+#' \code{output/chromhmm/<chromhmm_ref>/<marker>} where \code{chromhmm_ref}
+#' is the ChromHMM annotation filename without \code{.bed}
+#' (e.g. \code{gsub(".bed$", "", chromHMM_annotation)}). This ensures
+#' \code{add_results_to_epk()} keys results by ChromHMM reference rather than
+#' by loci name, allowing multiple references to coexist in one EPK.
+#'
+#' Designed for parallel execution via \code{\link{dispatch_jobs}}.
+#' The \code{.done} sentinel allows downstream cache-checking to skip completed
+#' markers on re-runs.
+#'
+#' For methylation markers (5mC / CXXC), use
+#' \code{\link{run_chromhmm_methylation}} instead, which includes CXXC in the
+#' file selection.
+#'
+#' @seealso \code{\link{run_bw_profile}}, \code{\link{run_chromhmm_methylation}},
+#'   \code{\link{dispatch_jobs}}
 #'
 #' @examples
 #' \dontrun{
-#' # Setup sample data
-#' bw_df <- data.frame(
-#'   marker = c("5mC", "5mC", "CXXC", "CXXC"),
-#'   sample_id = c("Sample_A", "Sample_A", "Sample_A", "Sample_A"),
-#'   replicate = c("rep1", "pooled", "rep1", "pooled"),
-#'   batch = c("B1", "B1", "B1", "B1"),
-#'   scaling = c("scaled", "scaled", "scaled", "scaled"),
-#'   bw_file = c("file1.bw", "file2.bw", "file3.bw", "file4.bw")
-#' )
-#' loci <- GenomicRanges::GRanges("chr1:1-1000:+")
-#'
-#' run_chromhmm_methylation_enrichment(
-#'   bw_df = bw_df,
-#'   bigwig_dir = "/path/to/bigwigs",
-#'   mk = "5mC",
-#'   loci = loci,
-#'   output_dir = "/path/to/output",
-#'   chromHmm_path = "/path/to/chromhmm",
+#' chromhmm_ref <- gsub(".bed$", "", "E107_15_coreMarks_hg38lift_mnemonics.bed")
+#' run_chromhmm_histone(
+#'   bw_df               = bw_df,
+#'   bigwig_dir          = "/path/to/bigwigs",
+#'   mk                  = "H3K4me3",
+#'   output_dir          = file.path("output/chromhmm", chromhmm_ref, "H3K4me3"),
+#'   chromHmm_path       = "data/chromHmm_annotations",
 #'   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-#'   product = "chromatin"
+#'   product             = "chromatin"
 #' )
 #' }
 #'
 #' @export
-run_chromhmm_methylation_enrichment <- function(bw_df, bigwig_dir, mk, loci,
-                                    output_dir, chromHmm_path, chromHMM_annotation,
-                                    product,
-                                    replicate_type = c("replicate", "pooled")) {
+run_chromhmm_histone <- function(bw_df, bigwig_dir, mk, output_dir,
+                                 chromHmm_path, chromHMM_annotation,
+                                 product,
+                                 replicate_type = c("replicate", "pooled")) {
   replicate_type <- match.arg(replicate_type)
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
   if (replicate_type == "pooled") {
-    bw_df_subset <- dplyr::filter(bw_df, replicate == "pooled",
-                                  marker == mk | marker == "CXXC" | tolower(marker) == "input")
+    bw_df_subset <- dplyr::filter(
+      bw_df,
+      replicate == "pooled",
+      marker == mk | tolower(marker) == "input"
+    )
   } else {
-    bw_df_subset <- dplyr::filter(bw_df, replicate != "pooled",
-                                  marker == mk | marker == "CXXC" | tolower(marker) == "input")
+    bw_df_subset <- dplyr::filter(
+      bw_df,
+      replicate != "pooled",
+      marker == mk | tolower(marker) == "input"
+    )
   }
 
   if (product != "cNUC") {
-    bw_df_subset <- dplyr::filter(bw_df_subset,
-                                  grepl("\\.scaled\\.", bw_file, perl = TRUE) |
-                                    tolower(marker) == "input")
+    bw_df_subset <- dplyr::filter(
+      bw_df_subset,
+      grepl("\\.scaled\\.", bw_file, perl = TRUE) | tolower(marker) == "input"
+    )
   } else {
-    bw_df_subset <- dplyr::filter(bw_df_subset,
-                                  grepl("\\.unscaled", bw_file) |
-                                    tolower(marker) == "input")
+    bw_df_subset <- dplyr::filter(
+      bw_df_subset,
+      grepl("\\.unscaled", bw_file) | tolower(marker) == "input"
+    )
   }
 
   allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
 
   if (length(allfiles) == 0) {
-    message(sprintf("[chromHMM:%s] no pooled bigWig files found - skipping enrichment profile.", mk))
+    message(sprintf("[chromHMM:%s] no BigWig files found in bw_df - skipping.", mk))
+    file.create(file.path(output_dir, ".done"))
+    return(invisible(NULL))
+  }
+
+  if (length(unique(bw_df_subset$batch)) > 1) {
+    allfiles_name <- paste0(
+      bw_df_subset$marker, "_", bw_df_subset$sample_id,
+      "_", bw_df_subset$replicate, "_", bw_df_subset$batch
+    )
   } else {
-    if (length(unique(bw_df_subset$batch)) > 1) {
-      allfiles_name <- paste0(
-        bw_df_subset$marker, "_", bw_df_subset$sample_id,
-        "_", bw_df_subset$replicate, "_", bw_df_subset$batch
-      )
-    } else {
-      allfiles_name <- paste0(
-        bw_df_subset$marker, "_", bw_df_subset$sample_id,
-        "_", bw_df_subset$replicate
-      )
-    }
-
-    p_enrich <- wigglescout::plot_bw_profile(
-      allfiles,
-      loci = loci,
-      mode = "center",
-      labels = allfiles_name
-    )
-
-    p_enrich <- p_enrich +
-      ggplot2::theme_bw(base_size = 16) +
-      ggplot2::labs(x = paste0(mk, " CpG islands (", length(loci), ") loci")) +
-      ggplot2::guides(color = ggplot2::guide_legend(ncol = 1, byrow = TRUE)) +
-      ggplot2::theme(
-        legend.position = "right",
-        legend.title = ggplot2::element_blank()
-      )
-
-    ggplot2::ggsave(
-      file.path(output_dir, paste0(mk, "_profile_center.png")),
-      plot = p_enrich,
-      width = 12,
-      height = 8
-    )
-
-    write.table(
-      p_enrich$data,
-      file.path(output_dir, paste0(mk, "_profile_center_data.csv")),
-      row.names = FALSE,
-      quote = FALSE,
-      col.names = TRUE,
-      sep = ","
+    allfiles_name <- paste0(
+      bw_df_subset$marker, "_", bw_df_subset$sample_id,
+      "_", bw_df_subset$replicate
     )
   }
 
-  # --- chromHMM boxplot ---
-  if (length(allfiles) == 0) {
-    message(sprintf("[chromHMM:%s] no bigWig files found in bw_df - skipping chromHMM boxplot.", mk))
-  } else {
-    p_heatmap <- wigglescout::plot_bw_loci_summary_heatmap(
-      allfiles,
-      file.path(chromHmm_path, chromHMM_annotation),
-      labels = allfiles_name,
-      remove_top = 0.01
-    )
+  p_heatmap <- wigglescout::plot_bw_loci_summary_heatmap(
+    allfiles,
+    file.path(chromHmm_path, chromHMM_annotation),
+    labels     = allfiles_name,
+    remove_top = 0.01
+  )
 
-    tmp_df <- p_heatmap@data
-    colnames(tmp_df) <- c("Chromatin_State", "sample_id_rep", "mean_rpgc_val", "mean_rpgc_text")
+  tmp_df <- p_heatmap@data
+  colnames(tmp_df) <- c("Chromatin_State", "sample_id_rep", "mean_rpgc_val", "mean_rpgc_text")
 
-    p_box <- ggplot2::ggplot(tmp_df, ggplot2::aes(x = Chromatin_State, y = mean_rpgc_val)) +
-      ggplot2::geom_boxplot() +
-      ggplot2::theme_bw() +
-      ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5)) +
-      ggplot2::labs(
-        title = paste0(mk, " coverage per region (mean RPGC)"),
-        x = "Features",
-        y = "RPGC"
-      ) +
-      ggplot2::coord_flip()
-
-    ggplot2::ggsave(
-      file.path(output_dir, paste0(mk, "_chromatin_state_dist.png")),
-      plot = p_box,
-      width = 12,
-      height = 8
-    )
-
-    write.table(
-      tmp_df,
-      file.path(output_dir, paste0(mk, "_chromatin_state_dist.csv")),
-      sep = ",",
-      quote = FALSE,
-      row.names = FALSE,
-      col.names = TRUE
-    )
-  }
+  write.table(
+    tmp_df,
+    file.path(output_dir, paste0(mk, "_chromatin_state_dist.csv")),
+    sep       = ",",
+    quote     = FALSE,
+    row.names = FALSE,
+    col.names = TRUE
+  )
 
   file.create(file.path(output_dir, ".done"))
   invisible(NULL)
 }
 
+
+#' Compute ChromHMM state distribution for methylation markers
+#'
+#' Filters BigWig metadata for methylation markers — including the paired CXXC
+#' control — computes per-chromatin-state mean RPGC via
+#' \code{wigglescout::plot_bw_loci_summary_heatmap}, and saves the summary
+#' table as a CSV. Profile generation is intentionally excluded — call
+#' \code{\link{run_bw_profile}} separately if a profile is also needed.
+#'
+#' Only call this function when the project contains methylation markers (5mC).
+#' For projects with histone marks only, use \code{\link{run_chromhmm_histone}}.
+#'
+#' @param bw_df Data frame of BigWig metadata with columns \code{marker},
+#'   \code{sample_id}, \code{replicate}, \code{batch}, and \code{bw_file}.
+#' @param bigwig_dir Character; directory containing the BigWig files listed
+#'   in \code{bw_df$bw_file}.
+#' @param mk Character; primary methylation marker (typically \code{"5mC"}).
+#'   CXXC files are included automatically.
+#' @param output_dir Character; directory for output files (created if absent).
+#' @param chromHmm_path Character; path to the ChromHMM annotation directory.
+#' @param chromHMM_annotation Character; ChromHMM annotation filename within
+#'   \code{chromHmm_path}.
+#' @param product Character; \code{"cNUC"} selects unscaled BigWigs; all other
+#'   values select scaled BigWigs. INPUT controls are always included.
+#' @param replicate_type Character; \code{"replicate"} (default, non-pooled)
+#'   or \code{"pooled"}.
+#'
+#' @return Invisibly returns \code{NULL}. Writes to \code{output_dir}:
+#'   \itemize{
+#'     \item CSV: \code{<mk>_chromatin_state_dist.csv} with columns
+#'       \code{Chromatin_State}, \code{sample_id_rep}, \code{mean_rpgc_val},
+#'       \code{mean_rpgc_text}
+#'     \item Sentinel: \code{.done} on successful completion
+#'   }
+#'
+#' @details
+#' CXXC files are pulled from \code{bw_df} alongside \code{mk} so that the
+#' ChromHMM enrichment reflects both 5mC and its unmodified counterpart in the
+#' same run. Chromatin state enrichment is genome-wide against the ChromHMM
+#' reference BED — no user-supplied loci are involved.
+#'
+#' \strong{Output directory convention:} use
+#' \code{output/chromhmm/<chromhmm_ref>/<marker>} — see
+#' \code{\link{run_chromhmm_histone}} for details.
+#'
+#' Designed for parallel execution via \code{\link{dispatch_jobs}}.
+#'
+#' @seealso \code{\link{run_bw_profile}}, \code{\link{run_chromhmm_histone}},
+#'   \code{\link{dispatch_jobs}}
+#'
+#' @examples
+#' \dontrun{
+#' # Only call when 5mC is present in the project
+#' chromhmm_ref <- gsub(".bed$", "", "E107_15_coreMarks_hg38lift_mnemonics.bed")
+#' run_chromhmm_methylation(
+#'   bw_df               = bw_df,
+#'   bigwig_dir          = "/path/to/bigwigs",
+#'   mk                  = "5mC",
+#'   output_dir          = file.path("output/chromhmm", chromhmm_ref, "5mC"),
+#'   chromHmm_path       = "data/chromHmm_annotations",
+#'   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
+#'   product             = "chromatin"
+#' )
+#' }
+#'
+#' @export
+run_chromhmm_methylation <- function(bw_df, bigwig_dir, mk, output_dir,
+                                     chromHmm_path, chromHMM_annotation,
+                                     product,
+                                     replicate_type = c("replicate", "pooled")) {
+  replicate_type <- match.arg(replicate_type)
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+
+  if (replicate_type == "pooled") {
+    bw_df_subset <- dplyr::filter(
+      bw_df,
+      replicate == "pooled",
+      marker == mk | marker == "CXXC" | tolower(marker) == "input"
+    )
+  } else {
+    bw_df_subset <- dplyr::filter(
+      bw_df,
+      replicate != "pooled",
+      marker == mk | marker == "CXXC" | tolower(marker) == "input"
+    )
+  }
+
+  if (product != "cNUC") {
+    bw_df_subset <- dplyr::filter(
+      bw_df_subset,
+      grepl("\\.scaled\\.", bw_file, perl = TRUE) | tolower(marker) == "input"
+    )
+  } else {
+    bw_df_subset <- dplyr::filter(
+      bw_df_subset,
+      grepl("\\.unscaled", bw_file) | tolower(marker) == "input"
+    )
+  }
+
+  allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
+
+  if (length(allfiles) == 0) {
+    message(sprintf("[chromHMM:%s] no BigWig files found in bw_df - skipping.", mk))
+    file.create(file.path(output_dir, ".done"))
+    return(invisible(NULL))
+  }
+
+  if (length(unique(bw_df_subset$batch)) > 1) {
+    allfiles_name <- paste0(
+      bw_df_subset$marker, "_", bw_df_subset$sample_id,
+      "_", bw_df_subset$replicate, "_", bw_df_subset$batch
+    )
+  } else {
+    allfiles_name <- paste0(
+      bw_df_subset$marker, "_", bw_df_subset$sample_id,
+      "_", bw_df_subset$replicate
+    )
+  }
+
+  p_heatmap <- wigglescout::plot_bw_loci_summary_heatmap(
+    allfiles,
+    file.path(chromHmm_path, chromHMM_annotation),
+    labels     = allfiles_name,
+    remove_top = 0.01
+  )
+
+  tmp_df <- p_heatmap@data
+  colnames(tmp_df) <- c("Chromatin_State", "sample_id_rep", "mean_rpgc_val", "mean_rpgc_text")
+
+  write.table(
+    tmp_df,
+    file.path(output_dir, paste0(mk, "_chromatin_state_dist.csv")),
+    sep       = ",",
+    quote     = FALSE,
+    row.names = FALSE,
+    col.names = TRUE
+  )
+
+  file.create(file.path(output_dir, ".done"))
+  invisible(NULL)
+}
+
+
 #' Dispatch and orchestrate parallel ChromHMM jobs
 #'
-#' Manages parallel execution of ChromHMM enrichment analysis jobs using
+#' Manages parallel execution of ChromHMM state distribution jobs using
 #' background R processes via \code{callr}. Maintains a worker pool, dispatches
 #' pending jobs, and monitors completion.
 #'
-#' @param jobs List of job specifications, each containing:
+#' @param jobs List of job specifications, each a named list with:
 #'   \itemize{
-#'     \item \code{fn}: Function to execute (e.g., \code{run_chromhmm_histone_enrichment}).
+#'     \item \code{fn}: Function to execute
+#'       (\code{\link{run_chromhmm_histone}} or
+#'       \code{\link{run_chromhmm_methylation}}).
 #'     \item \code{args}: Named list of arguments to pass to \code{fn}.
-#'     \item \code{mk}: Character; marker name (for logging).
+#'     \item \code{mk}: Character; marker name used for logging.
 #'   }
-#' @param n_workers Integer; maximum number of parallel workers to maintain.
+#' @param n_workers Integer; maximum number of parallel workers.
 #'
 #' @return Invisibly returns \code{NULL} after all jobs complete.
 #'
 #' @details
-#' This function:
 #' \enumerate{
 #'   \item Maintains a pool of up to \code{n_workers} background processes.
-#'   \item Polls running processes; upon completion, checks exit status and logs results.
+#'   \item Polls running processes; upon completion checks exit status and logs.
 #'   \item Dispatches pending jobs to idle workers.
-#'   \item Warns on non-zero exit status; messages on success.
+#'   \item Warns on non-zero exit; messages on success.
 #'   \item Loops until all jobs are complete.
 #' }
 #'
-#' Designed for large-scale, batch ChromHMM analysis where multiple markers
-#' can be processed simultaneously.
+#' @seealso \code{\link{run_bw_profile}}, \code{\link{run_chromhmm_histone}}, \code{\link{run_chromhmm_methylation}}
 #'
 #' @examples
 #' \dontrun{
-#' # Setup job list
-#' jobs <- list(
-#'   list(
-#'     fn = run_chromhmm_histone_enrichment,
-#'     args = list(
-#'       bw_df = bw_df,
-#'       bigwig_dir = "/path/to/bw",
-#'       mk = "H3K4me3",
-#'       loci = loci,
-#'       output_dir = "/path/to/out",
-#'       chromHmm_path = "/path/to/chromhmm",
-#'       chromHMM_annotation = "annotation.bed",
-#'       product = "chromatin"
-#'     ),
-#'     mk = "H3K4me3"
-#'   ),
-#'   list(
-#'     fn = run_chromhmm_histone_enrichment,
-#'     args = list(...),
-#'     mk = "H3K27ac"
-#'   )
-#' )
+#' histone_markers <- c("H3K4me3", "H3K27ac", "H3K9me3")
+#' chromhmm_annotation <- "E107_15_coreMarks_hg38lift_mnemonics.bed"
+#' chromhmm_ref        <- gsub(".bed$", "", chromhmm_annotation)
 #'
-#' dispatch_chromhmm_jobs(jobs, n_workers = 4)
+#' jobs <- lapply(histone_markers, function(mk) {
+#'   list(
+#'     fn   = run_chromhmm_histone,
+#'     mk   = mk,
+#'     args = list(
+#'       bw_df               = bw_df,
+#'       bigwig_dir          = "/path/to/bw",
+#'       mk                  = mk,
+#'       output_dir          = file.path("output/chromhmm", chromhmm_ref, mk),
+#'       chromHmm_path       = "data/chromHmm_annotations",
+#'       chromHMM_annotation = chromhmm_annotation,
+#'       product             = "chromatin"
+#'     )
+#'   )
+#' })
+#'
+#' dispatch_jobs(jobs, n_workers = 4)
+#'
+#' # Methylation separately, only if 5mC is in the project
+#' if ("5mC" %in% unique(bw_df$marker)) {
+#'   run_chromhmm_methylation(bw_df = bw_df, mk = "5mC", ...)
+#' }
 #' }
 #'
 #' @export
-dispatch_chromhmm_jobs <- function(jobs, n_workers) {
+dispatch_jobs <- function(jobs, n_workers) {
   running <- list()
   pending <- jobs
 
@@ -444,18 +459,14 @@ dispatch_chromhmm_jobs <- function(jobs, n_workers) {
     done <- vapply(running, function(j) !j$proc$is_alive(), logical(1))
 
     for (i in which(done)) {
-      j <- running[[i]]
+      j   <- running[[i]]
       err <- j$proc$read_all_error()
 
       if (j$proc$get_exit_status() != 0) {
-        warning(
-          sprintf(
-            "[chromHMM] worker '%s' FAILED (exit %d):\n%s",
-            j$mk,
-            j$proc$get_exit_status(),
-            err
-          )
-        )
+        warning(sprintf(
+          "[chromHMM] worker '%s' FAILED (exit %d):\n%s",
+          j$mk, j$proc$get_exit_status(), err
+        ))
       } else {
         if (nzchar(trimws(err))) {
           message(sprintf("[chromHMM] worker '%s' stderr:\n%s", j$mk, err))
@@ -467,14 +478,11 @@ dispatch_chromhmm_jobs <- function(jobs, n_workers) {
     running <- running[!done]
 
     while (length(running) < n_workers && length(pending) > 0) {
-      job <- pending[[1]]
+      job          <- pending[[1]]
       pending[[1]] <- NULL
 
       proc <- callr::r_bg(
         func = function(fn, fn_args) {
-          # Attach packages in the clean subprocess so that furrr's package
-          # auto-detection can resolve S4 classes (e.g. Seqinfo -> GenomeInfoDb)
-          # without trying library("Seqinfo"), which is a class not a package.
           library(GenomeInfoDb,  quietly = TRUE)  # nolint: undesirable_function_linter
           library(GenomicRanges, quietly = TRUE)  # nolint: undesirable_function_linter
           library(wigglescout,   quietly = TRUE)  # nolint: undesirable_function_linter
@@ -489,231 +497,14 @@ dispatch_chromhmm_jobs <- function(jobs, n_workers) {
 
       message(sprintf(
         "[chromHMM] dispatched: %s (%d/%d running)",
-        job$mk,
-        length(running),
-        n_workers
+        job$mk, length(running), n_workers
       ))
     }
 
-    if (length(running) == 0 && length(pending) == 0) {
-      break
-    }
+    if (length(running) == 0 && length(pending) == 0) break
 
     Sys.sleep(1)
   }
 
   invisible(NULL)
-}
-
-#' Run ChromHMM enrichment for all markers against a set of loci
-#'
-#' Runs ChromHMM enrichment analysis for all markers in \code{epk} against
-#' a single set of genomic \code{loci}. Call once per loci set (e.g. once
-#' for protein-coding genes, once for CpG islands). Results are written to
-#' \code{output_dir/<marker>/}, then loaded and stored in the EPK object
-#' keyed by \code{basename(output_dir)}.
-#'
-#' @param epk EPK object to update.
-#' @param bw_df Data frame of BigWig metadata (see \code{create_metadata_df}).
-#' @param bigwig_dir Character; directory containing BigWig files.
-#' @param loci \code{GRanges}; genomic features to use for enrichment
-#'   (e.g. protein-coding TSS regions, CpG islands, VISTA enhancers).
-#' @param output_dir Character; output directory for this loci set.
-#'   Sub-directories \code{<marker>/} are created automatically. The
-#'   basename is used as the key in \code{epk$enrichment_results}.
-#' @param chromHmm_path Character; path to ChromHMM annotation directory.
-#' @param chromHMM_annotation Character; ChromHMM annotation filename.
-#' @param product Character; product type (\code{"cNUC"} or
-#'   \code{"GenomePro"}).
-#' @param run_mode Character; \code{"parallel"} (default) uses
-#'   \code{callr} background processes; \code{"sequential"} runs one
-#'   marker at a time in a blocking subprocess.
-#' @param n_workers Integer; parallel worker count. \code{0L} (default)
-#'   auto-detects as \code{min(n_markers, detectCores() - 1)}.
-#' @param markers_exclude Character vector of markers to skip.
-#'   Defaults to \code{"INPUT"}. \code{NA} values are always dropped.
-#' @param methylation_markers Character vector of marker names that should
-#'   use \code{run_chromhmm_methylation_enrichment} (center-mode profile).
-#'   All other markers use \code{run_chromhmm_histone_enrichment}
-#'   (start-mode profile). Defaults to \code{c("5mC", "CXXC")}.
-#' @param replicate_type Character; which replicates to use. One of
-#'   \code{"replicate"} (default) or \code{"pooled"}. Passed through to
-#'   the per-marker worker functions.
-#' @param plot_bw_profile_mode Character; anchoring mode for histone enrichment
-#'   profiles. One of \code{"start"} (default), \code{"stretch"},
-#'   \code{"end"}, or \code{"center"}. Passed to
-#'   \code{run_chromhmm_histone_enrichment}; methylation markers always use
-#'   \code{"center"} regardless of this setting.
-#'
-#' @return The input \code{epk} with results appended:
-#'   \itemize{
-#'     \item \code{epk$enrichment_results$chromatin_states[[loci_name]]}
-#'       — named list of chromatin state data frames, one per marker.
-#'     \item \code{epk$enrichment_results$enrichment_profile[[loci_name]]}
-#'       — named list of profile data frames, one per marker.
-#'   }
-#'   where \code{loci_name = basename(output_dir)}.
-#'
-#' @details
-#' Sentinel-based skipping: a marker is skipped if its output directory
-#' already contains a \code{.done} file and all expected output files.
-#' Delete \code{.done} to force re-computation.
-#'
-#' @examples
-#' \dontrun{
-#' # Run once per loci set
-#' epk <- run_chromhmm_enrichment(
-#'   epk     = epk, bw_df = bw_df, bigwig_dir = bigwig_dir,
-#'   loci    = genes_coord_protein_coding,
-#'   output_dir          = "results/Enrichment/protein_coding",
-#'   chromHmm_path       = "data/chromHmm_annotations",
-#'   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-#'   product = "cNUC"
-#' )
-#' epk <- run_chromhmm_enrichment(
-#'   epk     = epk, bw_df = bw_df, bigwig_dir = bigwig_dir,
-#'   loci    = cpg_islands_coord,
-#'   output_dir          = "results/Enrichment/CpG_islands",
-#'   chromHmm_path       = "data/chromHmm_annotations",
-#'   chromHMM_annotation = "E107_15_coreMarks_hg38lift_mnemonics.bed",
-#'   product = "cNUC"
-#' )
-#' }
-#'
-#' @export
-run_chromhmm_enrichment <- function(
-  epk,
-  bw_df,
-  bigwig_dir,
-  loci,
-  output_dir,
-  chromHmm_path,
-  chromHMM_annotation,
-  product,
-  run_mode = c("parallel", "sequential"),
-  n_workers = 0L,
-  markers_exclude = c("INPUT"),
-  methylation_markers = c("5mC", "CXXC"),
-  replicate_type = c("replicate", "pooled"),
-  plot_bw_profile_mode = c("start", "stretch", "end", "center")
-) {
-  run_mode             <- match.arg(run_mode)
-  replicate_type       <- match.arg(replicate_type)
-  plot_bw_profile_mode <- match.arg(plot_bw_profile_mode)
-  loci_name <- basename(output_dir)
-
-  # All markers from epk, excluding requested and NA
-  markers_to_run <- setdiff(
-    unique(epk$tables$stats_summary$marker),
-    c(markers_exclude, NA)
-  )
-
-  if (length(markers_to_run) == 0) {
-    stop("No markers to process after exclusions.")
-  }
-
-  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-
-  .expected_files <- function(op, mk) {
-    mode <- if (mk %in% methylation_markers) "center" else plot_bw_profile_mode
-    profile_file <- paste0(mk, "_profile_", mode, ".png")
-    c(
-      file.path(op, profile_file),
-      file.path(op, paste0(mk, "_chromatin_state_dist.png")),
-      file.path(op, paste0(mk, "_chromatin_state_dist.csv"))
-    )
-  }
-
-  markers_needed <- Filter(function(mk) {
-    op <- file.path(output_dir, mk)
-    !file.exists(file.path(op, ".done")) ||
-      !all(file.exists(.expected_files(op, mk)))
-  }, markers_to_run)
-
-  if (length(markers_needed) > 0) {
-    nw <- if (n_workers == 0L) {
-      max(1L, min(length(markers_needed), parallel::detectCores() - 1L))
-    } else {
-      as.integer(n_workers)
-    }
-
-    message(sprintf(
-      "[chromHMM] %d marker(s) to compute for '%s': %s",
-      length(markers_needed), loci_name,
-      paste(markers_needed, collapse = ", ")
-    ))
-
-    common_args <- list(
-      bw_df               = bw_df,
-      bigwig_dir          = bigwig_dir,
-      loci                = loci,
-      chromHmm_path       = chromHmm_path,
-      chromHMM_annotation = chromHMM_annotation,
-      product             = product,
-      replicate_type      = replicate_type
-    )
-
-    jobs <- lapply(markers_needed, function(mk) {
-      op <- file.path(output_dir, mk)
-      dir.create(op, recursive = TRUE, showWarnings = FALSE)
-      is_methyl <- mk %in% methylation_markers
-      worker_fn <- if (is_methyl) {
-        run_chromhmm_methylation_enrichment
-      } else {
-        run_chromhmm_histone_enrichment
-      }
-      extra <- if (!is_methyl) {
-        list(plot_bw_profile_mode = plot_bw_profile_mode)
-      } else {
-        list()
-      }
-      list(
-        fn   = worker_fn,
-        mk   = mk,
-        args = c(list(mk = mk, output_dir = op), common_args, extra)
-      )
-    })
-
-    if (run_mode == "parallel") {
-      dispatch_chromhmm_jobs(jobs, n_workers = nw)
-    } else {
-      for (job in jobs) {
-        message(sprintf("[chromHMM] sequential: %s", job$mk))
-        callr::r(func = job$fn, args = job$args)
-      }
-    }
-  } else {
-    message(sprintf(
-      "[chromHMM] all markers done for '%s', loading from cache.", loci_name
-    ))
-  }
-
-  # ── Load results from disk ───────────────────────────────────────────────
-  files_state <- list.files(
-    output_dir,
-    pattern = ".*_chromatin_state_dist\\.csv$",
-    full.names = TRUE, recursive = TRUE
-  )
-  files_profile <- list.files(
-    output_dir,
-    pattern = ".*_profile_[a-z]+_data\\.csv$",
-    full.names = TRUE, recursive = TRUE
-  )
-
-  .read_csvs <- function(files) {
-    if (length(files) == 0) return(list())
-    setNames(
-      lapply(files, read.csv,
-             sep = ",", header = TRUE, stringsAsFactors = FALSE),
-      basename(dirname(files))
-    )
-  }
-
-  # ── Store in EPK ─────────────────────────────────────────────────────────
-  epk$enrichment_results$chromatin_states[[loci_name]] <-
-    .read_csvs(files_state)
-  epk$enrichment_results$enrichment_profile[[loci_name]] <-
-    .read_csvs(files_profile)
-
-  invisible(epk)
 }
