@@ -879,7 +879,7 @@ For internal reports and publications using EpigenicR, please cite:
 ```
 EpigenicR: R package for EpiFinder platform data analysis
 Epigenica (2026)
-Version 0.1.0
+Version 1.0.1
 Licensed under GPL-3
 https://github.com/epigenica/EpigenicR
 ```
