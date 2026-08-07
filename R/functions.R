@@ -78,7 +78,7 @@ extract_marker_names <- function(id, markers){
   }
   extrc_markers <- stringr::str_match(
     id,
-    "^([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_(rep[0-9]+|pooled)\\.(hg38)\\.(scaled|unscaled)\\.bw$")[4]
+    "^([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_(rep[0-9]+|pooled)\\.([^.]+)\\.(scaled|unscaled)\\.bw$")[4]
   return(extrc_markers)
 }
 
@@ -800,7 +800,7 @@ create_metadata_df <- function(map_id_vector= NULL, bw_files = NULL) {
       map_id_vector <- basename(bw_files)
       m <- stringr::str_match(
         map_id_vector,
-        "^([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_(rep[0-9]+|pooled)\\.(hg38)\\.(scaled|unscaled)\\.bw$")
+        "^([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_(rep[0-9]+|pooled)\\.([^.]+)\\.(scaled|unscaled)\\.bw$")
       # m columns: [1]=fullmatch, then capture groups 1..8
       bw_df <- tibble::tibble(
         bw_file    = map_id_vector,
@@ -818,7 +818,7 @@ create_metadata_df <- function(map_id_vector= NULL, bw_files = NULL) {
   }else{
     m <- stringr::str_match(
       map_id_vector,
-      "^([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_(rep[0-9]+|pooled)\\.(hg38)$")
+      "^([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_(rep[0-9]+|pooled)\\.([^.]+)$")
     # m columns: [1]=fullmatch, then capture groups 1..7
     bw_df <- tibble::tibble(
       map_id     = map_id_vector,

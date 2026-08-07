@@ -989,6 +989,7 @@ create_epk <- function(
     batch     = NA_character_,
     sample_id = NA_character_,
     replicate = NA_character_,
+    genome    = NA_character_,
     stringsAsFactors = FALSE
   )
 
@@ -1004,7 +1005,7 @@ create_epk <- function(
     # Primary parser for minute-style naming:
     # <project>_<batch>_<marker>_<rerun>_<sample_id>_<replicate>.<genome>.<scaled|unscaled>.bw
     m <- regexec(
-      "^([^_]+)_([^_]+)_([^_]+)_([^_]+)_(.+)_(pooled|rep[0-9]+)\\.[^.]+\\.(scaled|unscaled)\\.bw$",
+      "^([^_]+)_([^_]+)_([^_]+)_([^_]+)_(.+)_(pooled|rep[0-9]+)\\.([^.]+)\\.(scaled|unscaled)\\.bw$",
       filename,
       ignore.case = TRUE,
       perl = TRUE
@@ -1016,6 +1017,7 @@ create_epk <- function(
       metadata$batch[i]     <- g[3]
       metadata$sample_id[i] <- g[6]
       metadata$replicate[i] <- tolower(g[7])
+      metadata$genome[i]    <- g[8]
       next
     }
 
