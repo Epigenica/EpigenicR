@@ -12,6 +12,16 @@
 #'   \code{epk$enrichment_results$enrichment_profile[[loci]][[marker]]}.
 #' @param marker Character; marker name used to look up the profile inside
 #'   \code{epk$enrichment_results$enrichment_profile[[loci]]}.
+#' @param second_marker Optional character; a second marker name to overlay
+#'   alongside \code{marker} (for example, \code{"INPUT"}, or another marker
+#'   for a marker-vs-marker comparison). When provided, its profile is looked
+#'   up the same way as \code{marker} and row-bound to it; \code{sample}
+#'   values are prefixed with their marker (e.g. \code{"H3K4me3_A.c_rep1"}
+#'   vs \code{"INPUT_A.c_rep1"}) to avoid collisions, and a \code{marker}
+#'   column is added. If \code{group_by} is \code{NULL}, it defaults to
+#'   \code{"marker"} so the two groups are colored distinctly. Requires
+#'   \code{epk}, \code{marker}, and \code{loci} (not supported with a raw
+#'   \code{df}).
 #' @param loci Character; loci key (e.g. \code{"protein_coding"},
 #'   \code{"CpG_islands"}) used to look up the profile list inside
 #'   \code{epk$enrichment_results$enrichment_profile}.
@@ -78,9 +88,18 @@
 #'   loci   = "protein_coding"
 #' )
 #' p
+#'
+#' # Overlay a marker with its INPUT control
+#' p <- plot_enrichment_interactive(
+#'   epk           = epk,
+#'   marker        = "H3K4me3",
+#'   second_marker = "INPUT",
+#'   loci          = "protein_coding"
+#' )
+#' p
 #' }
 #'
-#' @importFrom dplyr mutate distinct left_join
+#' @importFrom dplyr mutate distinct left_join bind_rows
 #' @importFrom plotly plot_ly layout highlight highlight_key
 #' @importFrom grDevices hcl.colors rgb
 #' @importFrom stats setNames
@@ -89,6 +108,7 @@ plot_enrichment_interactive <- function(
     df = NULL,
     epk = NULL,
     marker = NULL,
+    second_marker = NULL,
     loci = NULL,
     bin_size = 100,
     window_bp = 2500,
@@ -126,9 +146,33 @@ plot_enrichment_interactive <- function(
         "No profile data found for marker '%s' under loci '%s'.", marker, loci
       ))
     }
-    if (identical(plot_title, "Enrichment Profile")) {
-      plot_title <- paste0(marker, " — ", loci)
+    df$marker <- marker
+
+    if (!is.null(second_marker)) {
+      df2nd <- profile_list[[second_marker]]
+      if (is.null(df2nd)) {
+        stop(sprintf(
+          "No profile data found for second_marker '%s' under loci '%s'.",
+          second_marker, loci
+        ))
+      }
+      df2nd$marker <- second_marker
+
+      df <- dplyr::bind_rows(df, df2nd)
+      df$sample <- paste(df$marker, df$sample, sep = "_")
+
+      if (is.null(group_by)) group_by <- "marker"
     }
+
+    if (identical(plot_title, "Enrichment Profile")) {
+      plot_title <- if (!is.null(second_marker)) {
+        paste0(marker, " vs ", second_marker, " — ", loci)
+      } else {
+        paste0(marker, " — ", loci)
+      }
+    }
+  } else if (!is.null(second_marker)) {
+    stop("'second_marker' requires 'epk' + 'marker' + 'loci' lookup; not supported with a raw 'df'.")
   }
 
   # ── Validation ──────────────────────────────────────────────────────────────

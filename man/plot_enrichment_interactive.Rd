@@ -8,6 +8,7 @@ plot_enrichment_interactive(
   df = NULL,
   epk = NULL,
   marker = NULL,
+  second_marker = NULL,
   loci = NULL,
   bin_size = 100,
   window_bp = 2500,
@@ -37,6 +38,17 @@ and \code{loci}, the profile data frame is extracted from
 
 \item{marker}{Character; marker name used to look up the profile inside
 \code{epk$enrichment_results$enrichment_profile[[loci]]}.}
+
+\item{second_marker}{Optional character; a second marker name to overlay
+alongside \code{marker} (for example, \code{"INPUT"}, or another marker
+for a marker-vs-marker comparison). When provided, its profile is looked
+up the same way as \code{marker} and row-bound to it; \code{sample}
+values are prefixed with their marker (e.g. \code{"H3K4me3_A.c_rep1"}
+vs \code{"INPUT_A.c_rep1"}) to avoid collisions, and a \code{marker}
+column is added. If \code{group_by} is \code{NULL}, it defaults to
+\code{"marker"} so the two groups are colored distinctly. Requires
+\code{epk}, \code{marker}, and \code{loci} (not supported with a raw
+\code{df}).}
 
 \item{loci}{Character; loci key (e.g. \code{"protein_coding"},
 \code{"CpG_islands"}) used to look up the profile list inside
@@ -120,6 +132,15 @@ p <- plot_enrichment_interactive(
   epk    = epk,
   marker = "H3K4me3",
   loci   = "protein_coding"
+)
+p
+
+# Overlay a marker with its INPUT control
+p <- plot_enrichment_interactive(
+  epk           = epk,
+  marker        = "H3K4me3",
+  second_marker = "INPUT",
+  loci          = "protein_coding"
 )
 p
 }
