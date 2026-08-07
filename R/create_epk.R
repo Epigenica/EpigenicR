@@ -411,9 +411,24 @@ create_epk <- function(
       } else {
         bw_metadata$sample_id[marker_idx]
       }
+
+      # Multiple BigWig files legitimately share the same sample_id whenever
+      # replicate_mode keeps more than one file per sample (e.g. "all" mixes
+      # pooled + rep1/rep2/rep3, "replicates" keeps rep1/rep2/rep3). Disambiguate
+      # using the real replicate id first, rather than jumping straight to
+      # positional make.unique() suffixes that don't track true replicate identity.
+      dup <- duplicated(marker_labels) | duplicated(marker_labels, fromLast = TRUE)
+      if (any(dup)) {
+        marker_labels[dup] <- paste(
+          marker_labels[dup], bw_metadata$replicate[marker_idx][dup],
+          sep = "_"
+        )
+      }
+
       # wigglescout uses dplyr joins internally and requires unique column names;
-      # pre-deduplicate with the same make.names path R applies to rownames so
-      # the result matches existing EPK sample names (e.g. X24h.Control.1)
+      # fall back to make.unique(make.names()) for anything still colliding
+      # (e.g. identical sample_id + replicate but different bigwig_scale under
+      # bigwig_scale = "both").
       if (anyDuplicated(marker_labels)) {
         marker_labels <- make.unique(make.names(marker_labels))
       }
