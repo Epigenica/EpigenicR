@@ -31,7 +31,10 @@
 #'   Used for validation and metadata.
 #'
 #' @param markers_to_exclude Character vector of marker names to skip
-#'   (default \code{c("INPUT")}). Useful for excluding control tracks.
+#'   (default \code{c("INPUT")}). Useful for excluding control tracks. Matching
+#'   is exact and case-sensitive against the parsed marker name. To include
+#'   \code{INPUT} as its own assay in \code{epk$mse}, set
+#'   \code{markers_to_exclude = character(0)}.
 #'
 #' @param markers_to_include Character vector of marker names to process.
 #'   When \code{NULL} (default) all markers detected after applying

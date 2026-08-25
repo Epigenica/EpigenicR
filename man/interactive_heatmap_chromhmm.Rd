@@ -4,28 +4,33 @@
 \alias{interactive_heatmap_chromhmm}
 \title{Interactive ChromHMM chromatin state heatmap}
 \usage{
-interactive_heatmap_chromhmm(epk, marker, loci, show_pooled = FALSE)
+interactive_heatmap_chromhmm(epk, marker, chromhmm_ref, show_pooled = FALSE)
 }
 \arguments{
 \item{epk}{An EPK object containing
-\code{epk$enrichment_results$chromatin_states[[loci]][[marker]]}.}
+\code{epk$enrichment_results$chromatin_states[[chromhmm_ref]][[marker]]}.}
 
 \item{marker}{Character; marker name (e.g. \code{"5mC"}, \code{"H3K4me3"}).}
 
-\item{loci}{Character; loci key matching a name in
-\code{epk$enrichment_results$chromatin_states}
-(e.g. \code{"protein_coding"}, \code{"cpg_islands"}).}
+\item{chromhmm_ref}{Character; ChromHMM annotation key matching a name in
+\code{epk$enrichment_results$chromatin_states}. Corresponds to the
+ChromHMM reference BED filename (without \code{.bed}), e.g.
+\code{"E107_15_coreMarks_hg38lift_mnemonics"}.}
 }
 \value{
 A \code{plotly} htmlwidget heatmap.
 }
 \description{
 Generates an interactive heatmap of mean RPGC per chromatin state across
-samples for a given marker and loci set.
+samples for a given marker and ChromHMM reference annotation.
 }
 \examples{
 \dontrun{
-p <- interactive_heatmap_chromhmm(epk, marker = "5mC", loci = "cpg_islands")
+p <- interactive_heatmap_chromhmm(
+  epk,
+  marker      = "H3K4me3",
+  chromhmm_ref = "E107_15_coreMarks_hg38lift_mnemonics"
+)
 p
 }
 

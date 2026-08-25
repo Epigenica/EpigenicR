@@ -13,7 +13,7 @@ plot_enrichment_interactive(
   bin_size = 100,
   window_bp = 2500,
   highlight_opacity = 0.5,
-  mid_coord = c("center", "start"),
+  mid_coord = c("center", "start", "stretch"),
   plot_title = "Enrichment Profile",
   control_samples = NULL,
   control_pattern = NULL,
@@ -63,7 +63,10 @@ column is added. If \code{group_by} is \code{NULL}, it defaults to
 traces. Default: \code{0.5}.}
 
 \item{mid_coord}{Character; reference point used for center label and x-axis
-title. One of \code{"center"} or \code{"start"}. Default:
+title. One of \code{"center"}, \code{"start"}, or \code{"stretch"}.
+\code{"stretch"} mode places tick marks at the upstream flank boundary,
+the feature start, the feature end, and the downstream flank boundary,
+with two dashed vertical lines marking start and end. Default:
 \code{"center"}.}
 
 \item{plot_title}{Character; title for the plot. Default:

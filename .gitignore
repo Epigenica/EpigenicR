@@ -2,6 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
+tmp/
 
 # files downloaded
 data/*bed

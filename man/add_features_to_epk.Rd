@@ -42,7 +42,10 @@ See \\code{create_epk()} for details.}
 
 \item{genome}{Character; genome version passed to \\code{create_epk()}.}
 
-\item{markers_to_exclude}{Character vector of marker names to skip.}
+\item{markers_to_exclude}{Character vector of marker names to skip.
+Default \\code{c("INPUT")}; matching is exact and case-sensitive. To
+include \\code{INPUT} as its own assay, set
+\\code{markers_to_exclude = character(0)}.}
 
 \item{experiment_names}{Optional character vector naming added experiments.}
 

@@ -18,6 +18,9 @@
 #'   See \\code{create_epk()} for details.
 #' @param genome Character; genome version passed to \\code{create_epk()}.
 #' @param markers_to_exclude Character vector of marker names to skip.
+#'   Default \\code{c("INPUT")}; matching is exact and case-sensitive. To
+#'   include \\code{INPUT} as its own assay, set
+#'   \\code{markers_to_exclude = character(0)}.
 #' @param experiment_names Optional character vector naming added experiments.
 #' @param overwrite Logical; if \\code{FALSE} (default), stop when experiment names
 #'   already exist in \\code{epk$mse}. If \\code{TRUE}, replace existing experiments.

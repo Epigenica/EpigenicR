@@ -19,7 +19,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Nimra Ali \email{nimra@epigenica.org}
+\strong{Maintainer}: Nima Rafati \email{nima.rafati@epigenica.org}
 
 }
 \keyword{internal}

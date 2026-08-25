@@ -40,7 +40,9 @@ See \code{\link{create_epk}} for details.}
 \item{genome}{Character; genome version (default \code{"hg38"}).}
 
 \item{markers_to_exclude}{Character vector of marker names to skip
-(default \code{c("INPUT")}).}
+(default \code{c("INPUT")}). Matching is exact and case-sensitive. To
+include \code{INPUT} as its own assay, set
+\code{markers_to_exclude = character(0)}.}
 
 \item{markers_to_include}{Character vector of marker names to process.
 When \code{NULL} (default) all detected markers minus exclusions are used.}

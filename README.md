@@ -131,6 +131,12 @@ print(epk)
 # * Created: 2026-04-01 ...
 ```
 
+`markers_to_exclude` defaults to `c("INPUT")` in `create_epk()`, `add_marker_to_epk()`, and
+`add_features_to_epk()`, so the INPUT control track is left out of `epk$mse` by default (it's
+an exact, case-sensitive match — a marker parsed as `"Input"` instead of `"INPUT"` would *not*
+be excluded). If you want INPUT included as its own assay, set `markers_to_exclude =
+character(0)` on the relevant call.
+
 #### Explicit mode
 
 ```r
@@ -826,6 +832,68 @@ interactive_heatmap_chromhmm(
   chromhmm_ref = "E107_15_coreMarks_hg38lift_mnemonics",
   show_pooled  = FALSE
 )
+```
+
+### 12. Attach Sample Metadata
+
+External sample annotations (condition, treatment, batch, etc.) are stored in
+`epk$tables$sample_metadata` — a plain data frame keyed by `sample_id`. This is
+simpler than writing into `colData(epk$mse)`: `MultiAssayExperiment` requires
+`colData` rownames to exactly match the primary sample IDs in `sampleMap`, and
+`epk` is a wrapper around an MAE rather than a pure one, so there's no need to
+force that constraint here. If you need metadata directly on `colData` for
+compatibility with another MAE-based tool, you can always set it yourself
+after the fact — see the note at the end of this section.
+
+```r
+# metadata_df must have a 'sample_id' column matching epk's sample IDs
+# (e.g. clean any formatting differences first, such as stripping a '#')
+metadata_df$sample_id <- gsub("#", "", metadata_df$sample_id)
+
+epk$tables$sample_metadata <- metadata_df
+```
+
+Join it into profile data for plotting. Profile `sample` columns follow
+`{marker}_{sample_id}_{replicate}` (e.g. `H3K4me3_HV175_rep1`):
+
+```r
+profile_df |>
+  dplyr::mutate(sample_id = sub("^[^_]+_(.+)_[^_]+$", "\\1", sample)) |>
+  dplyr::left_join(epk$tables$sample_metadata, by = "sample_id")
+```
+
+`plot_enrichment_interactive()` accepts a `metadata` argument directly — build
+a `sample` column matching the profile's format and pass it along with
+`group_by`:
+
+```r
+tmp_metadata <- epk$tables$sample_metadata |>
+  dplyr::mutate(sample = paste0("H3K4me3_", sample_id, "_rep1"))
+
+plot_enrichment_interactive(
+  epk           = epk,
+  marker        = "H3K4me3",
+  loci          = "protein_coding",
+  metadata      = tmp_metadata,
+  metadata_sample_col = "sample",
+  group_by      = "condition"
+)
+```
+
+**Optional: syncing to `colData(epk$mse)`.** If a downstream tool expects
+metadata on the `MultiAssayExperiment` itself, set it explicitly — just be
+aware `colData<-` requires the replacement `DataFrame`'s rownames to exactly
+match `colnames(epk$mse)`, so a plain `dplyr::left_join()` (which doesn't
+preserve rownames) isn't safe here:
+
+```r
+cd <- as.data.frame(MultiAssayExperiment::colData(epk$mse))
+cd$..rn <- rownames(cd)
+cd <- dplyr::left_join(cd, metadata_df, by = c("..rn" = "sample_id"))
+rownames(cd) <- cd$..rn
+cd$..rn <- NULL
+
+MultiAssayExperiment::colData(epk$mse) <- S4Vectors::DataFrame(cd)
 ```
 
 ---
