@@ -134,8 +134,10 @@ print(epk)
 `markers_to_exclude` defaults to `c("INPUT")` in `create_epk()`, `add_marker_to_epk()`, and
 `add_features_to_epk()`, so the INPUT control track is left out of `epk$mse` by default (it's
 an exact, case-sensitive match — a marker parsed as `"Input"` instead of `"INPUT"` would *not*
-be excluded). If you want INPUT included as its own assay, set `markers_to_exclude =
-character(0)` on the relevant call.
+be excluded). 
+
+**Note: If you want INPUT included as its own assay, set `markers_to_exclude =
+character(0)` on the relevant call.** 
 
 #### Explicit mode
 
