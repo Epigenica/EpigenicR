@@ -30,8 +30,10 @@
 #'     \item CSV: \code{<mk>_profile_<mode>_data.csv}
 #'   }
 #'
-#' @seealso \code{\link{run_chromhmm_histone}}, \code{\link{run_chromhmm_methylation}},
-#'   \code{\link{dispatch_jobs}}
+#' @seealso \code{\link{resolve_bw_profile_files}} to build \code{allfiles}/
+#'   \code{allfiles_name} from a \code{bw_df} with \code{replicate_type}
+#'   filtering, \code{\link{run_chromhmm_histone}},
+#'   \code{\link{run_chromhmm_methylation}}, \code{\link{dispatch_jobs}}
 #'
 #' @examples
 #' \dontrun{
@@ -100,6 +102,111 @@ run_bw_profile <- function(allfiles, allfiles_name, loci, mk, output_dir,
   )
 
   invisible(NULL)
+}
+
+
+#' Resolve a replicate/scaling-filtered BigWig file list for run_bw_profile()
+#'
+#' Filters \code{bw_df} metadata down to the rows matching \code{mk} (plus
+#' INPUT controls, and any \code{extra_markers} such as \code{"CXXC"} for
+#' methylation), applies \code{replicate_type} and \code{product}-based
+#' scaling selection, and builds the \code{allfiles}/\code{allfiles_name}
+#' pair expected by \code{\link{run_bw_profile}}. This is the shared filter
+#' used internally by \code{\link{run_chromhmm_histone}} and
+#' \code{\link{run_chromhmm_methylation}}; call it directly when you want the
+#' same \code{replicate_type} convenience for a profile via
+#' \code{\link{run_bw_profile}}, which otherwise takes an already-resolved
+#' file list.
+#'
+#' @param bw_df Data frame of BigWig metadata with columns \code{marker},
+#'   \code{sample_id}, \code{replicate}, \code{batch}, and \code{bw_file}.
+#' @param bigwig_dir Character; directory containing the BigWig files listed
+#'   in \code{bw_df$bw_file}.
+#' @param mk Character; marker name to select (e.g. \code{"H3K4me3"},
+#'   \code{"5mC"}).
+#' @param product Character; \code{"cNUC"} selects unscaled BigWigs; all other
+#'   values select scaled BigWigs. INPUT controls are always included.
+#' @param replicate_type Character; \code{"replicate"} (default, non-pooled)
+#'   or \code{"pooled"}.
+#' @param extra_markers Character vector of additional markers to always
+#'   include alongside \code{mk} (e.g. \code{"CXXC"} for methylation).
+#'   Default \code{NULL}.
+#'
+#' @return A list with \code{allfiles} (full paths) and \code{allfiles_name}
+#'   (sample labels, batch-suffixed only when \code{bw_df} spans more than
+#'   one batch), ready to pass into
+#'   \code{run_bw_profile(allfiles =, allfiles_name =, ...)}.
+#'
+#' @seealso \code{\link{run_bw_profile}}, \code{\link{run_chromhmm_histone}},
+#'   \code{\link{run_chromhmm_methylation}}
+#'
+#' @examples
+#' \dontrun{
+#' files <- resolve_bw_profile_files(
+#'   bw_df, bigwig_dir, mk = "H3K4me3",
+#'   product = "GenomePro", replicate_type = "pooled"
+#' )
+#' run_bw_profile(
+#'   allfiles      = files$allfiles,
+#'   allfiles_name = files$allfiles_name,
+#'   loci          = tss_granges,
+#'   mk            = "H3K4me3",
+#'   output_dir    = "results/protein_coding/H3K4me3",
+#'   mode          = "start",
+#'   loci_label    = "Protein coding"
+#' )
+#' }
+#'
+#' @export
+resolve_bw_profile_files <- function(bw_df, bigwig_dir, mk, product,
+                                     replicate_type = c("replicate", "pooled"),
+                                     extra_markers = NULL) {
+  replicate_type <- match.arg(replicate_type)
+  markers_wanted <- c(mk, extra_markers)
+
+  if (replicate_type == "pooled") {
+    bw_df_subset <- dplyr::filter(
+      bw_df,
+      replicate == "pooled",
+      marker %in% markers_wanted | tolower(marker) == "input"
+    )
+  } else {
+    bw_df_subset <- dplyr::filter(
+      bw_df,
+      replicate != "pooled",
+      marker %in% markers_wanted | tolower(marker) == "input"
+    )
+  }
+
+  if (product != "cNUC") {
+    bw_df_subset <- dplyr::filter(
+      bw_df_subset,
+      grepl("\\.scaled\\.", bw_file, perl = TRUE) | tolower(marker) == "input"
+    )
+  } else {
+    bw_df_subset <- dplyr::filter(
+      bw_df_subset,
+      grepl("\\.unscaled", bw_file) | tolower(marker) == "input"
+    )
+  }
+
+  allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
+
+  if (nrow(bw_df_subset) == 0) {
+    allfiles_name <- character(0)
+  } else if (length(unique(bw_df_subset$batch)) > 1) {
+    allfiles_name <- paste0(
+      bw_df_subset$marker, "_", bw_df_subset$sample_id,
+      "_", bw_df_subset$replicate, "_", bw_df_subset$batch
+    )
+  } else {
+    allfiles_name <- paste0(
+      bw_df_subset$marker, "_", bw_df_subset$sample_id,
+      "_", bw_df_subset$replicate
+    )
+  }
+
+  list(allfiles = allfiles, allfiles_name = allfiles_name)
 }
 
 
@@ -179,50 +286,20 @@ run_chromhmm_histone <- function(bw_df, bigwig_dir, mk, output_dir,
   replicate_type <- match.arg(replicate_type)
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-  if (replicate_type == "pooled") {
-    bw_df_subset <- dplyr::filter(
-      bw_df,
-      replicate == "pooled",
-      marker == mk | tolower(marker) == "input"
-    )
-  } else {
-    bw_df_subset <- dplyr::filter(
-      bw_df,
-      replicate != "pooled",
-      marker == mk | tolower(marker) == "input"
-    )
-  }
-
-  if (product != "cNUC") {
-    bw_df_subset <- dplyr::filter(
-      bw_df_subset,
-      grepl("\\.scaled\\.", bw_file, perl = TRUE) | tolower(marker) == "input"
-    )
-  } else {
-    bw_df_subset <- dplyr::filter(
-      bw_df_subset,
-      grepl("\\.unscaled", bw_file) | tolower(marker) == "input"
-    )
-  }
-
-  allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
+  files <- resolve_bw_profile_files(
+    bw_df          = bw_df,
+    bigwig_dir     = bigwig_dir,
+    mk             = mk,
+    product        = product,
+    replicate_type = replicate_type
+  )
+  allfiles      <- files$allfiles
+  allfiles_name <- files$allfiles_name
 
   if (length(allfiles) == 0) {
     message(sprintf("[chromHMM:%s] no BigWig files found in bw_df - skipping.", mk))
     file.create(file.path(output_dir, ".done"))
     return(invisible(NULL))
-  }
-
-  if (length(unique(bw_df_subset$batch)) > 1) {
-    allfiles_name <- paste0(
-      bw_df_subset$marker, "_", bw_df_subset$sample_id,
-      "_", bw_df_subset$replicate, "_", bw_df_subset$batch
-    )
-  } else {
-    allfiles_name <- paste0(
-      bw_df_subset$marker, "_", bw_df_subset$sample_id,
-      "_", bw_df_subset$replicate
-    )
   }
 
   p_heatmap <- wigglescout::plot_bw_loci_summary_heatmap(
@@ -321,50 +398,21 @@ run_chromhmm_methylation <- function(bw_df, bigwig_dir, mk, output_dir,
   replicate_type <- match.arg(replicate_type)
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-  if (replicate_type == "pooled") {
-    bw_df_subset <- dplyr::filter(
-      bw_df,
-      replicate == "pooled",
-      marker == mk | marker == "CXXC" | tolower(marker) == "input"
-    )
-  } else {
-    bw_df_subset <- dplyr::filter(
-      bw_df,
-      replicate != "pooled",
-      marker == mk | marker == "CXXC" | tolower(marker) == "input"
-    )
-  }
-
-  if (product != "cNUC") {
-    bw_df_subset <- dplyr::filter(
-      bw_df_subset,
-      grepl("\\.scaled\\.", bw_file, perl = TRUE) | tolower(marker) == "input"
-    )
-  } else {
-    bw_df_subset <- dplyr::filter(
-      bw_df_subset,
-      grepl("\\.unscaled", bw_file) | tolower(marker) == "input"
-    )
-  }
-
-  allfiles <- file.path(bigwig_dir, bw_df_subset$bw_file)
+  files <- resolve_bw_profile_files(
+    bw_df          = bw_df,
+    bigwig_dir     = bigwig_dir,
+    mk             = mk,
+    product        = product,
+    replicate_type = replicate_type,
+    extra_markers  = "CXXC"
+  )
+  allfiles      <- files$allfiles
+  allfiles_name <- files$allfiles_name
 
   if (length(allfiles) == 0) {
     message(sprintf("[chromHMM:%s] no BigWig files found in bw_df - skipping.", mk))
     file.create(file.path(output_dir, ".done"))
     return(invisible(NULL))
-  }
-
-  if (length(unique(bw_df_subset$batch)) > 1) {
-    allfiles_name <- paste0(
-      bw_df_subset$marker, "_", bw_df_subset$sample_id,
-      "_", bw_df_subset$replicate, "_", bw_df_subset$batch
-    )
-  } else {
-    allfiles_name <- paste0(
-      bw_df_subset$marker, "_", bw_df_subset$sample_id,
-      "_", bw_df_subset$replicate
-    )
   }
 
   p_heatmap <- wigglescout::plot_bw_loci_summary_heatmap(

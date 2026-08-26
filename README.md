@@ -921,7 +921,8 @@ MultiAssayExperiment::colData(epk$mse) <- S4Vectors::DataFrame(cd)
 | `interactive_heatmap_chromhmm()` | Visualisation | `epk`, `marker`, `chromhmm_ref`, `show_pooled` | `plotly` heatmap |
 | `ensure_gtf_and_beds()` | Annotations | `gtf_file`, `gtf_url`, `genes_bed`, `tss2k_bed` | BED files written to disk |
 | `download_chromhmm_annotations()` | Annotations | `annotations`, `dest_dir` | BED files written to disk |
-| `run_bw_profile()` | ChromHMM | `allfiles`, `allfiles_name`, `loci`, `mk`, `output_dir`, `mode` (`"start"` / `"end"` / `"center"` / `"stretch"`), `loci_label` | PNG + CSV profile per marker |
+| `run_bw_profile()` | Enrichment profile | `allfiles`, `allfiles_name`, `loci`, `mk`, `output_dir`, `mode` (`"start"` / `"end"` / `"center"` / `"stretch"`), `loci_label` | PNG + CSV profile per marker |
+| `resolve_bw_profile_files()` | Enrichment profile | `bw_df`, `bigwig_dir`, `mk`, `product`, `replicate_type`, `extra_markers` | List: `allfiles`, `allfiles_name` |
 | `run_chromhmm_histone()` | ChromHMM | `bw_df`, `bigwig_dir`, `mk`, `output_dir`, `chromHmm_path`, `chromHMM_annotation`, `product`, `replicate_type` | `<marker>_chromatin_state_dist.csv` + `.done` |
 | `run_chromhmm_methylation()` | ChromHMM | `bw_df`, `bigwig_dir`, `mk`, `output_dir`, `chromHmm_path`, `chromHMM_annotation`, `product`, `replicate_type` | `<marker>_chromatin_state_dist.csv` + `.done` |
 | `dispatch_jobs()` | Enrichment | `jobs`, `n_workers` | Runs jobs in parallel; files written by workers |

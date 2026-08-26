@@ -81,6 +81,8 @@ run_bw_profile(
 
 }
 \seealso{
-\code{\link{run_chromhmm_histone}}, \code{\link{run_chromhmm_methylation}},
-  \code{\link{dispatch_jobs}}
+\code{\link{resolve_bw_profile_files}} to build \code{allfiles}/
+  \code{allfiles_name} from a \code{bw_df} with \code{replicate_type}
+  filtering, \code{\link{run_chromhmm_histone}},
+  \code{\link{run_chromhmm_methylation}}, \code{\link{dispatch_jobs}}
 }

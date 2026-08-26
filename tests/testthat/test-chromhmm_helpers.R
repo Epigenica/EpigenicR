@@ -16,6 +16,112 @@ make_bw_df <- function() {
   )
 }
 
+# ── resolve_bw_profile_files: shared filter helper ────────────────────────────
+
+test_that("resolve_bw_profile_files selects marker + INPUT rows (non-pooled, scaled)", {
+  bw_df <- make_bw_df()
+
+  files <- resolve_bw_profile_files(
+    bw_df, bigwig_dir = "/bw", mk = "H3K4me3", product = "GenomePro"
+  )
+
+  expect_length(files$allfiles, 3L)
+  expect_true(all(grepl("^/bw/", files$allfiles)))
+  expect_true(all(grepl("H3K4me3|INPUT", files$allfiles_name)))
+  expect_false(any(grepl("5mC|CXXC", files$allfiles_name)))
+})
+
+test_that("resolve_bw_profile_files selects only pooled rows when replicate_type='pooled'", {
+  bw_df <- data.frame(
+    marker    = c("H3K4me3", "H3K4me3", "INPUT"),
+    sample_id = c("S1",      "S1",      "S1"),
+    replicate = c("rep1",    "pooled",  "pooled"),
+    batch     = c("B1",      "B1",      "B1"),
+    bw_file   = c("H3K4.rep1.scaled.bw", "H3K4.pooled.scaled.bw", "INPUT.pooled.scaled.bw"),
+    stringsAsFactors = FALSE
+  )
+
+  files <- resolve_bw_profile_files(
+    bw_df, bigwig_dir = "/bw", mk = "H3K4me3",
+    product = "GenomePro", replicate_type = "pooled"
+  )
+
+  expect_length(files$allfiles, 2L)
+  expect_true(all(grepl("pooled", files$allfiles_name)))
+})
+
+test_that("resolve_bw_profile_files selects unscaled files for cNUC product", {
+  bw_df <- data.frame(
+    marker    = c("H3K4me3", "H3K4me3"),
+    sample_id = c("S1",      "S1"),
+    replicate = c("rep1",    "rep1"),
+    batch     = c("B1",      "B1"),
+    bw_file   = c("H3K4.scaled.bw", "H3K4.unscaled.bw"),
+    stringsAsFactors = FALSE
+  )
+
+  files <- resolve_bw_profile_files(
+    bw_df, bigwig_dir = "/bw", mk = "H3K4me3", product = "cNUC"
+  )
+
+  expect_length(files$allfiles, 1L)
+  expect_true(grepl("unscaled", files$allfiles))
+})
+
+test_that("resolve_bw_profile_files includes extra_markers (CXXC) alongside mk", {
+  bw_df <- make_bw_df()
+
+  files <- resolve_bw_profile_files(
+    bw_df, bigwig_dir = "/bw", mk = "5mC",
+    product = "GenomePro", extra_markers = "CXXC"
+  )
+
+  expect_true(any(grepl("CXXC", files$allfiles_name)))
+  expect_true(any(grepl("5mC",  files$allfiles_name)))
+  expect_false(any(grepl("H3K4me3", files$allfiles_name)))
+})
+
+test_that("resolve_bw_profile_files omits batch suffix for a single batch", {
+  bw_df <- data.frame(
+    marker    = c("H3K4me3", "INPUT"),
+    sample_id = c("S1",      "S1"),
+    replicate = c("rep1",    "rep1"),
+    batch     = c("B1",      "B1"),
+    bw_file   = c("H3K4.scaled.bw", "INPUT.scaled.bw"),
+    stringsAsFactors = FALSE
+  )
+
+  files <- resolve_bw_profile_files(bw_df, bigwig_dir = "/bw", mk = "H3K4me3", product = "GenomePro")
+
+  expect_false(any(grepl("_B1$", files$allfiles_name)))
+})
+
+test_that("resolve_bw_profile_files adds batch suffix across multiple batches", {
+  bw_df <- data.frame(
+    marker    = c("H3K4me3", "H3K4me3"),
+    sample_id = c("S1",      "S2"),
+    replicate = c("rep1",    "rep1"),
+    batch     = c("B1",      "B2"),
+    bw_file   = c("H3K4.scaled.bw", "H3K4_S2.scaled.bw"),
+    stringsAsFactors = FALSE
+  )
+
+  files <- resolve_bw_profile_files(bw_df, bigwig_dir = "/bw", mk = "H3K4me3", product = "GenomePro")
+
+  expect_true(all(grepl("_B[12]$", files$allfiles_name)))
+})
+
+test_that("resolve_bw_profile_files returns empty lists when nothing matches", {
+  bw_df <- data.frame(marker = character(0), sample_id = character(0),
+                      replicate = character(0), batch = character(0),
+                      bw_file = character(0), stringsAsFactors = FALSE)
+
+  files <- resolve_bw_profile_files(bw_df, bigwig_dir = "/bw", mk = "H3K4me3", product = "GenomePro")
+
+  expect_length(files$allfiles, 0L)
+  expect_length(files$allfiles_name, 0L)
+})
+
 # ── run_chromhmm_histone: file filtering ─────────────────────────────────────
 
 test_that("run_chromhmm_histone selects marker + INPUT rows (non-pooled, scaled)", {
