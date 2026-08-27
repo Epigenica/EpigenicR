@@ -898,6 +898,37 @@ cd$..rn <- NULL
 MultiAssayExperiment::colData(epk$mse) <- S4Vectors::DataFrame(cd)
 ```
 
+### 13. Remove Samples from an EPK Object
+
+`remove_samples_from_epk()` drops one or more samples from every slot at once —
+`epk$mse` (every experiment, `colData`, `sampleMap`), correlation matrices and
+profile tables nested in `epk$enrichment_results` / `epk$derived`, and the
+per-replicate rows in `epk$tables$stats_summary`.
+
+```r
+epk <- remove_samples_from_epk(epk, samples = c("A.c_rep1", "A.c_rep2"))
+```
+
+`samples` must match `colnames(epk$mse)` exactly — a biological sample can span
+multiple replicate columns, and rather than guess which ones belong together,
+find them explicitly first:
+
+```r
+grep("^A.c", colnames(epk$mse), value = TRUE)
+# [1] "A.c_rep1" "A.c_rep2" "A.c_rep3"
+```
+
+**Gotcha — digit-leading sample IDs.** A purely numeric `sample_id` (e.g.
+`"7156"`) isn't a syntactically valid R name, so `make.names()` prepends an
+`"X"` wherever it gets applied (some `epk$mse` column-naming paths) but not
+everywhere (e.g. `enrichment_profile`'s `sample` column, written straight from
+CSV output, keeps the original unprefixed value). The same sample can end up
+as both `"X7156_rep1"` and `"7156_rep1"` in different slots of the same
+object — check each slot's actual values (`grep("7156", ..., value = TRUE)`)
+and call the function once per naming variant if needed. It also only checks
+`epk$tables$stats_summary` by `sample_id_rep`, not `sample_id` — filter that
+table directly by `sample_id` for edge cases it doesn't catch.
+
 ---
 
 ## Function Reference
@@ -908,6 +939,7 @@ MultiAssayExperiment::colData(epk$mse) <- S4Vectors::DataFrame(cd)
 | `add_features_to_epk()` | EPK creation | `epk`, `annotations`, `pipeline_output_path` or `bw_files`, `bigwig_scale`, `replicate_mode`, `scaling_info_file`, `label_by`, `overwrite` | Updated `EPK` |
 | `add_marker_to_epk()` | EPK creation | `epk`, `bw_files` or `pipeline_output_path`, `markers_to_include`, `markers_to_exclude`, `bigwig_scale`, `replicate_mode`, `overwrite` | Updated `EPK` with new assays |
 | `add_results_to_epk()` | Results loading | `epk`, `results_path` | Updated `EPK` with enrichment slots populated |
+| `remove_samples_from_epk()` | Sample management | `epk`, `samples` | Updated `EPK` with matching samples removed from every slot |
 | `create_metadata_df()` | Metadata | `bw_files` or `map_id_vector` | Tibble: project_id, batch, marker, sample_id, replicate, … |
 | `extract_marker_names()` | Metadata | `id`, `markers` | Character vector of marker names |
 | `plot_qc_stats()` | QC | `data` or `epk`, `stats`, `engine`, `sample_labeling`, `ncol` | `ggplot` or `plotly` figure |
