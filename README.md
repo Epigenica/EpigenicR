@@ -929,6 +929,56 @@ and call the function once per naming variant if needed. It also only checks
 `epk$tables$stats_summary` by `sample_id_rep`, not `sample_id` — filter that
 table directly by `sample_id` for edge cases it doesn't catch.
 
+### 14. Reconstruct or Patch `stats_summary`
+
+If `stats_summary.txt` was missing (or incomplete) when you ran `create_epk()`, you don't
+need to rebuild the whole `EPK` object — that would re-run `wigglescout::bw_loci()` for
+every marker × experiment again. `epk$tables$stats_summary` can be patched in place.
+
+**What `create_epk()` actually expects vs. derives:**
+
+| Source | Columns |
+|--------|---------|
+| Must already be in the raw table (raw pipeline QC — not computed) | `map_id`, `library`, `barcode`, `reference`, `raw_demultiplexed`, `raw_mapped`, `mapq_mapped`, `dedup_mapped`, `final_mapped`, `library_size`, `percent_duplication`, `insert_size` |
+| Auto-derived from `map_id` + BigWig filenames — don't add these yourself | `marker`, `sample_id`, `replicate`, `sample_id_rep` |
+| Auto-computed from `raw_mapped` / `raw_demultiplexed` | `frac_mapped` |
+| Attached from a separate `scalinginfo.txt` (not from `stats_summary` at all) | `msr` |
+
+`map_id` is the only strictly required column — it must follow
+`<project>_<batch>_<marker>_<rerun>_<sample_id>_<replicate>.<genome>` (no `.bw`/`.scaled`/
+`.unscaled` suffix) so it can be matched against your BigWig filenames. Leave
+`marker`/`sample_id`/`replicate`/`sample_id_rep` out of a manually-built table and let
+`create_epk()`'s matching logic fill them in — that guarantees they stay consistent with how
+the BigWig filenames themselves get parsed, rather than risking a hand-typed mismatch.
+
+To patch an existing `epk` (no `pipeline_output_path` needed since you already have `bw_files`):
+
+```r
+bw_metadata <- EpigenicR:::.prepare_bw_metadata(bw_files = bw_files)
+
+stats_summary <- EpigenicR:::.enrich_stats_summary_from_bw_metadata(
+  stats_summary,
+  bw_metadata,
+  replicate_mode = "all"   # match whatever replicate_mode you originally used
+)
+
+# frac_mapped is computed in create_epk() itself, not inside that helper
+if (all(c("raw_mapped", "raw_demultiplexed") %in% names(stats_summary))) {
+  num <- suppressWarnings(as.numeric(stats_summary$raw_mapped))
+  den <- suppressWarnings(as.numeric(stats_summary$raw_demultiplexed))
+  stats_summary$frac_mapped <- ifelse(is.na(den) | den == 0, NA_real_, num / den)
+}
+
+epk$tables$stats_summary <- stats_summary
+```
+
+This reproduces exactly what `create_epk()` would have done to the table, using the same
+BigWig-filename matching, without touching `epk$mse` / `enrichment_results` / `derived`.
+
+Note: `.prepare_bw_metadata()` and `.enrich_stats_summary_from_bw_metadata()` are internal
+(unexported) helpers, reached here via `:::`. That's fine for a one-off manual fix like this,
+but they aren't part of the package's stable public API.
+
 ---
 
 ## Function Reference
