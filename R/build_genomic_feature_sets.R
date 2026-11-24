@@ -29,8 +29,9 @@
 #'
 #' @return A named list of \code{GRanges}, in priority order: \code{tss},
 #'   \code{promoter}, \code{utr5}, \code{utr3}, \code{exon}, \code{intron},
-#'   \code{intergenic}. Each has a \code{feature_id} metadata column. Empty
-#'   sets are dropped.
+#'   \code{intergenic}.  Each has the metadata columns \code{feature_id},
+#'   \code{gene_id} and \code{gene_name}. A region that overlaps several genes
+#'   lists them all, separated by commas. Intergenic regions have \code{NA}.
 #'
 #' @details
 #' A base that fits several definitions is assigned to the first matching set
@@ -105,7 +106,6 @@ build_genomic_feature_sets <- function(gtf_file,
 
   utrs <- .split_utrs(gtf)
 
-  # Strand-aware windows around the transcription start site
   tss_gr <- GenomicRanges::promoters(tx, upstream = tss_flank, downstream = tss_flank + 1)
   prom_gr <- if (promoter_upstream > 0) {
     GenomicRanges::promoters(tx, upstream = promoter_upstream, downstream = 0)
@@ -113,7 +113,6 @@ build_genomic_feature_sets <- function(gtf_file,
     tx[0]
   }
 
-  # Chromosomes, in natural order (1..22, X, Y)
   chroms <- unique(as.character(GenomicRanges::seqnames(genes)))
   chr_key <- sub("^chr", "", chroms)
   chr_rank <- suppressWarnings(as.integer(chr_key))
@@ -132,7 +131,7 @@ build_genomic_feature_sets <- function(gtf_file,
     intergenic = genome_gr
   )
 
-  # Assign each base to the first set that claims it
+
   claimed <- .plain_ranges(genome_gr[0], chroms)
   sets <- list()
   for (nm in names(candidates)) {
@@ -142,6 +141,10 @@ build_genomic_feature_sets <- function(gtf_file,
     claimed <- GenomicRanges::reduce(c(claimed, piece))
     if (length(piece) > 0) {
       S4Vectors::mcols(piece)$feature_id <- paste0(nm, "_", seq_along(piece))
+      S4Vectors::mcols(piece) <- cbind(
+        S4Vectors::mcols(piece),
+        .gene_labels(piece, candidates[[nm]])
+      )
       sets[[nm]] <- piece
     }
   }
@@ -161,6 +164,37 @@ build_genomic_feature_sets <- function(gtf_file,
   )
 
   sets
+}
+
+#' Gene IDs and names of the source regions that overlap each region
+#' @keywords internal
+.gene_labels <- function(piece, source) {
+  out <- S4Vectors::DataFrame(
+    gene_id   = rep(NA_character_, length(piece)),
+    gene_name = rep(NA_character_, length(piece))
+  )
+  meta <- S4Vectors::mcols(source)
+  if (!all(c("gene_id", "gene_name") %in% names(meta))) return(out)
+
+  hits <- suppressWarnings(
+    GenomicRanges::findOverlaps(piece, source, ignore.strand = TRUE)
+  )
+  if (length(hits) == 0) return(out)
+  q <- S4Vectors::queryHits(hits)
+  s <- S4Vectors::subjectHits(hits)
+
+  # One row per region and gene, then join the genes of each region with ","
+  pairs <- unique(data.frame(
+    q         = q,
+    gene_id   = as.character(meta$gene_id[s]),
+    gene_name = as.character(meta$gene_name[s])
+  ))
+  gene_ids   <- tapply(pairs$gene_id,   pairs$q, paste, collapse = ",")
+  gene_names <- tapply(pairs$gene_name, pairs$q, paste, collapse = ",")
+  idx <- as.integer(names(gene_ids))
+  out$gene_id[idx]   <- as.character(gene_ids)
+  out$gene_name[idx] <- as.character(gene_names[names(gene_ids)])
+  out
 }
 
 #' Split UTR records into 5' and 3' UTRs
